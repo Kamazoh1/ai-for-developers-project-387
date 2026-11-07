@@ -58,6 +58,7 @@ jobs:
             actions: read
           # There is no CLAUDE.md, the project rules live in AGENTS.md.
           claude_args: |
+            --model claude-haiku-5-5
             --max-turns 40
             --allowedTools "Bash(mise run *),Bash(gh pr *),Bash(gh issue *),Bash(git *)"
             --append-system-prompt "Read AGENTS.md first and follow it: Conventional Commits, the contract in api/main.tsp changes first, keep `mise run check` green before you push. Never edit or delete .github/workflows/hexlet-check.yml."
