@@ -1,7 +1,7 @@
 # Календарь звонков
 
 
-[![hexlet-check](https://github.com/Kamazoh1/ai-for-developers-project-386/actions/workflows/hexlet-check.yml/badge.svg)](https://github.com/Kamazoh1/ai-for-developers-project-386/actions)
+[![hexlet-check](https://github.com/Kamazoh1/ai-for-developers-project-387/actions/workflows/hexlet-check.yml/badge.svg)](https://github.com/Kamazoh1/ai-for-developers-project-387/actions)
 
 Разработайте совместно с ИИ сервис для бронирования календаря
 
@@ -18,8 +18,8 @@
 ## Установка
 
 ```bash
-git clone https://github.com/Kamazoh1/ai-for-developers-project-386.git
-cd ai-for-developers-project-386
+git clone https://github.com/Kamazoh1/ai-for-developers-project-387.git
+cd ai-for-developers-project-387
 mise install        # инструменты нужных версий
 mise run install    # зависимости
 mise run hooks      # git-хуки

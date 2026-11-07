@@ -38,7 +38,7 @@ All tooling versions are pinned in `mise.toml`; run everything through mise.
 
 ### Issue tracker
 
-Issues live in GitHub Issues (`Kamazoh1/ai-for-developers-project-386`, via `gh`). See `docs/agents/issue-tracker.md`.
+Issues live in GitHub Issues (`Kamazoh1/ai-for-developers-project-387`, via `gh`). See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
