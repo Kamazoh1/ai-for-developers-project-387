@@ -1,0 +1,24 @@
+# python
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.db
+*.db-shm
+*.db-wal
+
+# node
+node_modules/
+dist/
+
+# generated from api/main.tsp (run `mise run generate`)
+frontend/src/api/
+
+# secrets: never commit keys or tokens (the Render API key comes from RENDER_API_KEY)
+.env
+.env.*
+
+# editors / os
+.idea/
+.vscode/
+.DS_Store

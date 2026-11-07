@@ -1,0 +1,3 @@
+# Calendar timezone is an explicit setting, instants are stored in UTC
+
+The calendar has one time zone, set by `CALENDAR_TIMEZONE` and defaulting to `Europe/Moscow`; it is exposed read-only through the API. Slots are exchanged as RFC 3339 instants with an offset and stored in UTC, and a slot's day is its local date in the calendar timezone. We rejected hard-coding a single implicit zone: it is cheap now but changing the contract and stored data later is not, and instants let guest-side conversion be added without a breaking change. The MVP UI still shows slots in the calendar timezone, labelled with the zone name, and does not convert to the guest's zone.

@@ -1,0 +1,40 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - '**'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: jdx/mise-action@v4
+        with:
+          version: 2026.10.24
+          experimental: true
+
+      - run: mise run install
+      - run: mise run e2e:install
+      # System libraries Chromium needs on a bare runner.
+      - run: npm exec --prefix e2e -- playwright install-deps chromium
+      # The same single command as locally: check (lint, types, tests, build) + the browser scenario.
+      - run: mise run verify
+
+  # The Dockerfile is part of the product: build the image, start it with a PORT of our choice and
+  # run the browser scenario against the container (what a checker does with the Dockerfile).
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: jdx/mise-action@v4
+        with:
+          version: 2026.10.24
+          experimental: true
+
+      - run: mise run e2e:install
+      - run: npm exec --prefix e2e -- playwright install-deps chromium
+      - run: mise run docker:smoke

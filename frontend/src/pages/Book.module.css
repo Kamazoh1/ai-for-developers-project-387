@@ -1,0 +1,19 @@
+.row {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.row:hover {
+  border-color: var(--mantine-color-brand-5);
+}
+
+.minutes {
+  flex-shrink: 0;
+}
+
+/* min-width 0 lets the one-line description truncate instead of widening the row. */
+.text {
+  flex: 1;
+  min-width: 0;
+}

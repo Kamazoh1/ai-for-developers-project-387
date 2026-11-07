@@ -1,0 +1,23 @@
+# Render Blueprint: one web service built from the Dockerfile in the repo root.
+# Render > New > Blueprint > pick this repository, or create the service through the Render MCP
+# server (see README, "Деплой на Render").
+services:
+  - type: web
+    name: call-calendar
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    # Deploy a commit only after its CI checks pass.
+    autoDeployTrigger: checksPass
+    healthCheckPath: /health
+    envVars:
+      # The app listens on $PORT. Render sets it itself (10000 by default); it is written down
+      # here so that the contract is visible.
+      - key: PORT
+        value: "10000"
+      - key: CALENDAR_TIMEZONE
+        value: Europe/Moscow
+      # Free web services have no persistent disk: the SQLite file lives in the container and is
+      # LOST on every redeploy, restart and spin-down (after 15 minutes without traffic).
+      - key: DATABASE_PATH
+        value: /tmp/call-calendar.db

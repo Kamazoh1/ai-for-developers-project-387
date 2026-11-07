@@ -1,0 +1,25 @@
+[project]
+name = "backend"
+version = "0.3.0"
+requires-python = "==3.13.*"
+dependencies = [
+    "fastapi[standard]>=0.162.0",
+]
+
+[dependency-groups]
+dev = [
+    "openapi-core>=0.23.1",
+    "pytest>=9.2.0",
+    "ruff>=0.17.3",
+    "ty>=0.0.95",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

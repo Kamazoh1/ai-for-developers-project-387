@@ -1,0 +1,27 @@
+# Keep the build context small and free of local state and secrets.
+.git
+.github
+.claude
+.agents
+.env
+.env.*
+*.db
+*.db-shm
+*.db-wal
+
+**/node_modules
+**/dist
+**/__pycache__
+**/.venv
+**/.pytest_cache
+**/.ruff_cache
+
+# generated inside the image
+frontend/src/api
+
+# not needed to run the app
+e2e
+docs
+*.md
+Dockerfile
+.dockerignore

@@ -1,0 +1,42 @@
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mantine-spacing-xs);
+  color: var(--mantine-color-text);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.logoIcon {
+  color: var(--mantine-primary-color-filled);
+}
+
+.link {
+  white-space: nowrap;
+  padding: 8px 12px;
+  border-radius: var(--mantine-radius-md);
+  color: var(--mantine-color-dimmed);
+  font-size: var(--mantine-font-size-sm);
+  text-decoration: none;
+
+  &:hover {
+    background-color: var(--mantine-color-gray-1);
+  }
+
+  &[aria-current="page"] {
+    background-color: var(--mantine-color-gray-1);
+    color: var(--mantine-color-text);
+  }
+}
+
+/* Keep both links on one line in the fixed-height header on phones. */
+@media (max-width: 36em) {
+  .logoText {
+    display: none;
+  }
+
+  .link {
+    padding: 6px 8px;
+    font-size: var(--mantine-font-size-xs);
+  }
+}

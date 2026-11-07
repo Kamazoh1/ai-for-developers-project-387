@@ -1,0 +1,131 @@
+[settings]
+experimental = true # required for daemons
+
+[tools]
+python = "3.13.18"
+node = "26.13.0"
+uv = "0.13.6"
+hk = "2.10.0"
+pkl = "0.32.2"
+pitchfork = "2.32.4"
+
+# --- setup ---------------------------------------------------------------
+
+[tasks.install]
+description = "Install backend, contract and frontend dependencies"
+run = [
+  "uv sync --project backend --locked",
+  "npm ci --prefix api",
+  "npm ci --prefix frontend",
+]
+
+[tasks.hooks]
+description = "Install git hooks (pre-commit, commit-msg)"
+run = "hk install"
+
+[tasks.generate]
+description = "TypeSpec contract -> OpenAPI -> frontend SDK"
+run = [
+  "npm run build --prefix api",
+  "npm run generate --prefix frontend",
+]
+
+# --- checks (`mise run check` is what CI calls; the pre-commit hook runs `precommit`) ---
+
+[tasks.lint]
+description = "ruff + oxlint + format checks"
+depends = ["generate"]
+run = [
+  "uv run --project backend ruff check backend",
+  "uv run --project backend ruff format --check backend",
+  "npm run lint --prefix frontend",
+  "npm run format:check --prefix frontend",
+]
+
+[tasks.typecheck]
+description = "ty + tsc"
+depends = ["generate"]
+run = [
+  "uv run --project backend ty check backend",
+  "npm run typecheck --prefix frontend",
+]
+
+[tasks.test]
+description = "Backend pytest (incl. the contract test) + frontend vitest"
+depends = ["generate"]
+run = [
+  "uv run --project backend pytest backend",
+  "npm run test --prefix frontend",
+]
+
+[tasks.build]
+description = "Production build of the frontend"
+depends = ["generate"]
+run = "npm run build --prefix frontend"
+
+[tasks.check]
+description = "All checks: lint, types, tests, build"
+depends = ["lint", "typecheck", "test", "build"]
+
+[tasks.precommit]
+description = "Fast checks for the pre-commit hook: lint + types"
+depends = ["lint", "typecheck"]
+
+[tasks.fix]
+description = "Auto-fix lint and formatting"
+run = [
+  "uv run --project backend ruff check --fix backend",
+  "uv run --project backend ruff format backend",
+  "npm run format --prefix frontend",
+]
+
+# --- browser tests (separate from `check`: they need a browser and take a while) ---
+
+[tasks."e2e:install"]
+description = "Install the e2e package and the Chromium browser for Playwright"
+run = [
+  "npm ci --prefix e2e",
+  "npm exec --prefix e2e -- playwright install chromium",
+]
+
+[tasks.e2e]
+description = "Browser scenario on a real backend (temporary DB) and frontend; needs `mise run install` and `e2e:install`"
+depends = ["generate"]
+run = "npm test --prefix e2e"
+
+[tasks."e2e:url"]
+description = "The same browser scenario against a running app, e.g. `mise run e2e:url -- https://<name>.onrender.com`"
+run = "node e2e/remote.mjs"
+
+# --- Docker image (one image: API + built frontend, listens on $PORT) -------------
+
+[tasks."docker:build"]
+description = "Build the Docker image `call-calendar`"
+run = "docker build -t call-calendar ."
+
+[tasks."docker:run"]
+description = "Run the image on $PORT (default 8080): http://localhost:8080"
+depends = ["docker:build"]
+run = 'docker run --rm -e PORT="${PORT:-8080}" -p "${PORT:-8080}:${PORT:-8080}" call-calendar'
+
+[tasks."docker:smoke"]
+description = "Build the image, start it on a free PORT and run the browser scenario against it (needs Docker and `e2e:install`)"
+run = "node e2e/image.mjs"
+
+# --- everything, in one command (locally and in CI) ---------------------------
+
+[tasks.verify]
+description = "Every check: `check` (lint, types, tests, build), then the `e2e` browser scenario; needs `e2e:install` once"
+# Sequential on purpose: the build and the browser scenario would fight over the CPU if run in parallel.
+run = [{ task = "check" }, { task = "e2e" }]
+
+# --- development servers (mise daemons, managed by pitchfork) ---------------
+# mise daemons start | stop | status | logs
+
+[daemons.backend]
+run = "cd backend && exec uv run uvicorn --factory app.main:create_app --reload --port 8000"
+ready_port = 8000
+
+[daemons.frontend]
+run = "cd frontend && exec npm run dev -- --port 5173 --strictPort"
+ready_port = 5173
