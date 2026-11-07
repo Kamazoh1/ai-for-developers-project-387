@@ -8,6 +8,8 @@
 Учебный проект Хекслета: https://ru.hexlet.io/programs/ai-for-developers
 Как это должно работать: https://files.hexlet.app/a/2ipc5m
 
+Тестовый стенд на Render: https://call-calendar-xbuh.onrender.com (бесплатный план: после простоя первый запрос идёт около минуты, данные сбрасываются при каждом редеплое и перезапуске)
+
 ## Стек
 
 - Бекенд: Python 3.13, FastAPI, uv, pytest, ruff, ty
