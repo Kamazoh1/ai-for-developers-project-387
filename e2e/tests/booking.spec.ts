@@ -89,7 +89,7 @@ test("@adjacent two guests race for one slot, the owner sees the winner", async 
 });
 
 // Runs after the race test on purpose: that one expects to be the only and the nearest booking.
-test("a guest leaves a topic, the owner sees it only on that booking", async ({
+test("@main a guest leaves a topic, the owner sees it only on that booking", async ({
   page,
   browser,
   baseURL,
