@@ -62,13 +62,18 @@ jobs:
           fi
           python3 .github/scripts/browser_check.py build --report "$REPORT" --out "$OUT"
 
+      # One directory, so that result.json lies at the root of the artifact (upload-artifact keeps
+      # the folder structure of files that come from different places).
+      - name: Collect the artifact files
+        if: always()
+        run: |
+          cp "$RUNNER_TEMP/playwright-report.json" "$RUNNER_TEMP/browser-check/"
+          if [ -d e2e/test-results ]; then cp -r e2e/test-results "$RUNNER_TEMP/browser-check/"; fi
+
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: browser-check-${{ github.event.pull_request.head.sha }}
-          path: |
-            ${{ runner.temp }}/browser-check/result.json
-            ${{ runner.temp }}/playwright-report.json
-            e2e/test-results/
+          path: ${{ runner.temp }}/browser-check/
           if-no-files-found: error
           retention-days: 30
