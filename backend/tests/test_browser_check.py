@@ -147,3 +147,96 @@ def test_a_failed_verdict_is_not_a_reason_to_merge_even_for_the_current_head(bro
 
     assert not ok
     assert "fail" in message
+
+
+# --- the merge-time assessment of a downloaded artifact -------------------------------------------
+
+
+def write_artifact(
+    browser_check,
+    root: Path,
+    rep: dict,
+    *,
+    nested: bool = False,
+    claimed_verdict: str | None = None,
+):
+    """An artifact directory as `gh run download` leaves it; `nested` is the layout of the first
+    version of the workflow (`_temp/browser-check/...`), which broke `verify`."""
+    import json
+
+    where = root / "_temp" / "browser-check" if nested else root
+    where.mkdir(parents=True, exist_ok=True)
+    result = build(browser_check, rep, pr_title="feat: let guests leave a topic (#6)")
+    if claimed_verdict:
+        result["verdict"] = claimed_verdict
+        result["reasons"] = []
+    (where / "result.json").write_text(json.dumps(result), encoding="utf-8")
+    (where / "playwright-report.json").write_text(json.dumps(rep), encoding="utf-8")
+
+
+@pytest.mark.parametrize("nested", [False, True], ids=["artifact root", "nested _temp layout"])
+def test_the_artifact_is_found_whatever_the_layout(browser_check, tmp_path, nested):
+    write_artifact(browser_check, tmp_path, report(MAIN_OK, ADJACENT_OK), nested=nested)
+
+    ok, message = browser_check.assess(
+        tmp_path, pr_head_sha=HEAD, pr_title="feat: let guests leave a topic (#6)"
+    )
+
+    assert ok, message
+
+
+def test_the_verdict_in_the_artifact_is_not_trusted_it_is_recomputed_from_the_raw_report(
+    browser_check, tmp_path
+):
+    # the artifact claims a pass, the raw Playwright report says a scenario failed
+    broken = report(MAIN_OK, spec("@adjacent two guests race for one slot", "unexpected"))
+    write_artifact(browser_check, tmp_path, broken, claimed_verdict="pass")
+
+    ok, message = browser_check.assess(
+        tmp_path, pr_head_sha=HEAD, pr_title="feat: let guests leave a topic (#6)"
+    )
+
+    assert not ok
+    assert "two guests race for one slot" in message
+
+
+def test_a_pr_retitled_to_feat_after_its_run_still_needs_a_main_scenario(browser_check, tmp_path):
+    write_artifact(
+        browser_check, tmp_path, report(ADJACENT_OK, spec("@adjacent another", "expected"))
+    )
+
+    ok, message = browser_check.assess(
+        tmp_path, pr_head_sha=HEAD, pr_title="feat: now it is a feature"
+    )
+
+    assert not ok
+    assert "@main" in message
+
+
+def test_an_artifact_without_result_or_report_is_refused(browser_check, tmp_path):
+    ok, message = browser_check.assess(tmp_path, pr_head_sha=HEAD, pr_title="ci: x")
+
+    assert not ok
+    assert "result.json" in message
+
+
+def test_changes_to_the_check_itself_are_flagged_for_the_person_who_merges(browser_check):
+    touched = browser_check.watched_files_touched(
+        [
+            "README.md",
+            ".github/scripts/browser_check.py",
+            "e2e/playwright.config.ts",
+            "api/main.tsp",
+        ]
+    )
+
+    assert touched == [".github/scripts/browser_check.py", "e2e/playwright.config.ts"]
+    assert browser_check.watched_files_touched(["README.md"]) == []
+
+
+def test_an_email_address_in_a_title_is_not_a_tag(browser_check):
+    rep = report(spec("@adjacent mail to guest@example.com is sent", "expected"))
+
+    (scenario,) = browser_check.scenarios_from_report(rep)
+
+    assert scenario.tags == ("adjacent",)

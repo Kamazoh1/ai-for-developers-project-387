@@ -24,7 +24,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-TAG = re.compile(r"@(\w+)")
+TAG = re.compile(r"(?<!\S)@(\w+)")  # not the @ of an e-mail address
 FEATURE_TITLE = re.compile(r"^feat(\([^)]*\))?!?:")
 # Playwright test statuses: `expected` is a pass, `unexpected` a failure, `flaky` passed only after
 # a retry (the config has none, so it would be a surprise and counts as a failure).
@@ -133,6 +133,49 @@ def check_for_merge(result: dict, *, pr_head_sha: str) -> tuple[bool, str]:
     )
 
 
+# The artifact is produced by the PR's own copy of these files. A PR that changes them can make its
+# own check say what it likes, so the person who merges must read those changes first.
+WATCHED_FILES = (
+    ".github/scripts/browser_check.py",
+    ".github/workflows/browser-check.yml",
+    "e2e/playwright.config.ts",
+)
+
+
+def watched_files_touched(changed_files: list[str]) -> list[str]:
+    return [name for name in changed_files if name in WATCHED_FILES]
+
+
+def assess(directory: Path, *, pr_head_sha: str, pr_title: str) -> tuple[bool, str]:
+    """The merge decision from a downloaded artifact.
+
+    The verdict stored in the artifact is NOT trusted: it was computed by the PR's own code, and
+    the title may have changed after the run. It is recomputed here, by this (base branch) copy of
+    the script, from the raw Playwright report and the PR's current title. Only the head SHA and the
+    run facts are taken from `result.json`. The files are searched for, so the layout of the
+    artifact does not matter.
+    """
+    found_result = next(directory.rglob("result.json"), None)
+    found_report = next(directory.rglob("playwright-report.json"), None)
+    if found_result is None or found_report is None:
+        return False, (
+            "REFUSED: the artifact has no result.json or no playwright-report.json "
+            f"(looked in {directory})."
+        )
+    stored = json.loads(found_result.read_text(encoding="utf-8"))
+    report = json.loads(found_report.read_text(encoding="utf-8"))
+    recomputed = build_result(
+        scenarios_from_report(report),
+        head_sha=stored["head_sha"],
+        merge_sha=stored["merge_sha"],
+        pr_number=stored["pr"],
+        pr_title=pr_title,
+        run_url=stored["run_url"],
+        finished_at=stored["finished_at"],
+    )
+    return check_for_merge(recomputed, pr_head_sha=pr_head_sha)
+
+
 def gh(*args: str) -> str:
     return subprocess.run(
         ["gh", *args], check=True, capture_output=True, text=True
@@ -160,9 +203,8 @@ def command_build(arguments: argparse.Namespace) -> int:
 
 
 def command_verify(arguments: argparse.Namespace) -> int:
-    head_sha = gh(
-        "pr", "view", str(arguments.pr), "--json", "headRefOid", "--jq", ".headRefOid"
-    ).strip()
+    pr = json.loads(gh("pr", "view", str(arguments.pr), "--json", "headRefOid,title"))
+    head_sha, title = pr["headRefOid"], pr["title"]
     runs = json.loads(
         gh(
             "run",
@@ -195,11 +237,20 @@ def command_verify(arguments: argparse.Namespace) -> int:
                 check=False,  # a missing artifact is not an error: try the next run
             )
             if downloaded.returncode == 0:
-                result = json.loads(
-                    (Path(directory) / "result.json").read_text(encoding="utf-8")
+                ok, message = assess(
+                    Path(directory), pr_head_sha=head_sha, pr_title=title
                 )
-                ok, message = check_for_merge(result, pr_head_sha=head_sha)
                 print(message)
+                touched = watched_files_touched(
+                    gh("pr", "diff", str(arguments.pr), "--name-only").split()
+                )
+                if touched:
+                    print(
+                        "WARNING: this PR changes the check itself ("
+                        + ", ".join(touched)
+                        + "): the artifact comes from the PR's own version of it. "
+                        "Read those changes before trusting the result."
+                    )
                 return 0 if ok else 1
     print(
         f"REFUSED: no browser-check artifact for the current head {head_sha} of PR #{arguments.pr}."
