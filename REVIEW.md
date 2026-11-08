@@ -33,6 +33,7 @@ A change that makes an ADR or the glossary wrong needs the document updated in t
 - New or changed behavior has a test at the level where it can fail: pytest for the API, vitest for the UI logic, the Playwright scenario for the booking flow. A bug fix has a test that fails without the fix.
 - A test that mocks the thing under test, or asserts only that code ran, does not count.
 - Concurrency rules (double booking) stay covered over HTTP on a file-based database.
+- A `feat` PR brings a browser scenario whose title contains the tag `@main`; a neighbouring flow keeps its `@adjacent` scenario. The independent browser check (`browser-check.yml`) fails a `feat` PR without a passing `@main` one, and its artifact must carry the PR's current head SHA at the merge decision.
 
 ## Security and secrets
 

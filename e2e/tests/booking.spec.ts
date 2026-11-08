@@ -24,7 +24,9 @@ async function fillGuest(page: Page, name: string, email: string) {
   await page.getByLabel("Email").fill(email);
 }
 
-test("two guests race for one slot, the owner sees the winner", async ({
+// Tags in the title tell the independent browser check what a scenario is for: `@main` is a scenario
+// of the feature a `feat` PR brings, `@adjacent` a neighbouring flow that must keep working.
+test("@adjacent two guests race for one slot, the owner sees the winner", async ({
   page,
   browser,
   baseURL,

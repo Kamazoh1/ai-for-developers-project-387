@@ -1,0 +1,79 @@
+name: browser-check
+
+# Independent browser check of a pull request. It is a separate workflow and a separate runner from
+# ci.yml: it builds the app from scratch, drives the real backend and frontend in Chromium, and
+# leaves an artifact with the verdict and the EXACT head SHA of the PR. Whoever decides on the merge
+# compares that SHA with the PR's current head (`mise run browser-check:verify -- <PR>`).
+# Scenario tags: `@main` = the feature of a `feat` PR, `@adjacent` = a neighbour that must keep
+# working. See "Независимая браузерная проверка" in README.md.
+#
+# Plain `pull_request`, no secrets, no `pull_request_target`: a fork PR may run it safely.
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+# A new push makes the running check obsolete: its artifact would carry an outdated head SHA.
+concurrency:
+  group: browser-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  browser-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: jdx/mise-action@v4
+        with:
+          version: 2026.10.24
+          experimental: true
+      - run: mise run install
+      - run: mise run e2e:install
+      - run: npm exec --prefix e2e -- playwright install-deps chromium
+
+      - name: Run the browser scenarios
+        id: browser
+        env:
+          E2E_JSON_REPORT: ${{ runner.temp }}/playwright-report.json
+        run: mise run e2e
+
+      # Always: a failed check must leave its artifact (verdict, reasons, traces) just as well.
+      - name: Build result.json with the head SHA
+        if: always()
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          MERGE_SHA: ${{ github.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          REPORT: ${{ runner.temp }}/playwright-report.json
+          OUT: ${{ runner.temp }}/browser-check/result.json
+        run: |
+          mkdir -p "$(dirname "$OUT")"
+          export FINISHED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          if [ ! -f "$REPORT" ]; then
+            echo '{"suites": []}' > "$REPORT" # the suite died before it reported: record it as a fail
+          fi
+          python3 .github/scripts/browser_check.py build --report "$REPORT" --out "$OUT"
+
+      # One directory, so that result.json lies at the root of the artifact (upload-artifact keeps
+      # the folder structure of files that come from different places).
+      - name: Collect the artifact files
+        if: always()
+        run: |
+          cp "$RUNNER_TEMP/playwright-report.json" "$RUNNER_TEMP/browser-check/"
+          if [ -d e2e/test-results ]; then cp -r e2e/test-results "$RUNNER_TEMP/browser-check/"; fi
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: browser-check-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/browser-check/
+          if-no-files-found: error
+          retention-days: 30
