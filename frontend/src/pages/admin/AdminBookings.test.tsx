@@ -47,7 +47,7 @@ describe("upcoming meetings page", () => {
     expect(within(card).getByText("30 мин")).toBeVisible();
   });
 
-  it("shows the guest's topic as plain text, and only on meetings that have one", async () => {
+  it("shows the guest's topic as plain text, and only on bookings that have one", async () => {
     backendWith([
       booking({ id: 1, guestName: "Анна", topic: "Обсудить <i>релиз</i>" }),
       booking({ id: 2, guestName: "Борис", topic: "" }),
