@@ -1,9 +1,14 @@
 name: ci
 
+# `pull_request` is what checks every commit of a PR, including the ones the agent pushes: a push
+# made by the agent does not start a `push` run (no ci run was created for such commits), but it
+# does start `pull_request` runs. `push` stays only for main, so a person's push to a PR branch is
+# not run twice. A branch without a PR gets no CI until its PR is opened.
 on:
   push:
     branches:
-      - '**'
+      - main
+  pull_request:
 
 jobs:
   verify:
