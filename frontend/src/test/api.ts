@@ -62,7 +62,6 @@ export function booking(overrides: Partial<Booking> = {}): Booking {
     end: "2026-11-06T09:30:00+03:00",
     guestName: "Мария",
     guestEmail: "maria@example.com",
-    topic: "",
     createdAt: "2026-11-05T10:00:00+03:00",
     ...overrides,
   };

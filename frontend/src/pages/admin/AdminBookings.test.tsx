@@ -47,19 +47,6 @@ describe("upcoming meetings page", () => {
     expect(within(card).getByText("30 мин")).toBeVisible();
   });
 
-  it("shows the guest's topic as plain text, and only on meetings that have one", async () => {
-    backendWith([
-      booking({ id: 1, guestName: "Анна", topic: "Обсудить <i>релиз</i>" }),
-      booking({ id: 2, guestName: "Борис", topic: "" }),
-    ]);
-
-    renderApp("/admin/bookings");
-
-    const [withTopic, withoutTopic] = await screen.findAllByRole("article");
-    expect(within(withTopic).getByText("Тема: Обсудить <i>релиз</i>")).toBeVisible();
-    expect(within(withoutTopic).queryByText(/Тема:/)).not.toBeInTheDocument();
-  });
-
   it("lists meetings in the order the server returns them and shows long durations in hours", async () => {
     backendWith([
       booking({
