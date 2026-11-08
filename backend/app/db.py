@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS bookings (
     end_utc       TEXT NOT NULL,
     guest_name    TEXT NOT NULL,
     guest_email   TEXT NOT NULL,
+    topic         TEXT NOT NULL DEFAULT '',
     created_at    TEXT NOT NULL
 );
 """
@@ -55,6 +56,20 @@ class Database:
             # WAL lets readers proceed while a booking transaction holds the write lock.
             connection.execute("PRAGMA journal_mode=WAL")
             connection.executescript(SCHEMA)
+            self._add_topic_column(connection)
+
+    @staticmethod
+    def _add_topic_column(connection: sqlite3.Connection) -> None:
+        """Databases made before bookings had a topic get the column; their rows get ''."""
+        columns = {row["name"] for row in connection.execute("PRAGMA table_info(bookings)")}
+        if "topic" in columns:
+            return
+        try:
+            connection.execute("ALTER TABLE bookings ADD COLUMN topic TEXT NOT NULL DEFAULT ''")
+        except sqlite3.OperationalError as error:
+            # Another process started at the same moment and added it first.
+            if "duplicate column" not in str(error):
+                raise
 
 
 @contextmanager

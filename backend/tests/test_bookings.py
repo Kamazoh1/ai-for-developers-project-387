@@ -53,8 +53,51 @@ def test_booking_a_free_slot_returns_the_booking_with_the_end_computed_by_the_se
         "end": "2026-11-06T10:45:00+03:00",
         "guestName": "Мария",
         "guestEmail": "maria@example.com",
+        "topic": "",
         "createdAt": "2026-11-05T10:00:00+03:00",
     }
+
+
+def test_a_topic_is_optional_trimmed_and_returned(make_client: ClientFactory) -> None:
+    client = make_client(now=NOW)
+    slug = create_type(client, 30)
+
+    with_topic = book(client, slug, "2026-11-06T10:00:00+03:00", topic="  Обсудить релиз  ")
+    blank = book(client, slug, "2026-11-06T11:00:00+03:00", topic="   ")
+
+    assert with_topic.status_code == 201
+    assert with_topic.json()["topic"] == "Обсудить релиз"
+    assert blank.status_code == 201
+    assert blank.json()["topic"] == ""
+
+
+def test_a_topic_may_have_500_characters_but_not_501(make_client: ClientFactory) -> None:
+    client = make_client(now=NOW)
+    slug = create_type(client, 30)
+
+    ok = book(client, slug, "2026-11-06T10:00:00+03:00", topic="т" * 500)
+    too_long = book(client, slug, "2026-11-06T11:00:00+03:00", topic="т" * 501)
+
+    assert ok.status_code == 201
+    assert too_long.status_code == 422
+    assert too_long.json()["code"] == "validation_error"
+    assert [f["field"] for f in too_long.json()["fields"]] == ["topic"]
+    assert "11:00" in free_starts(client, slug, "2026-11-06")
+
+
+def test_a_conflicting_booking_with_a_topic_is_refused_and_its_topic_is_not_kept(
+    make_client: ClientFactory,
+) -> None:
+    client = make_client(now=NOW)
+    slug = create_type(client, 30)
+    assert book(client, slug, "2026-11-06T10:00:00+03:00", topic="Первая").status_code == 201
+
+    refused = book(client, slug, "2026-11-06T10:00:00+03:00", topic="Вторая")
+
+    assert refused.status_code == 409
+    assert refused.json()["code"] == "slot_taken"
+    listed = client.get("/api/admin/bookings").json()
+    assert [b["topic"] for b in listed] == ["Первая"]
 
 
 def test_a_booked_interval_disappears_from_the_slots_at_once(make_client: ClientFactory) -> None:
