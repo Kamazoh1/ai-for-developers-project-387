@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.0](https://github.com/Kamazoh1/ai-for-developers-project-387/compare/v0.3.0...v0.4.0) (2026-11-08)
+
+
+### Features
+
+* let guests leave a topic for the call ([#21](https://github.com/Kamazoh1/ai-for-developers-project-387/issues/21), [#22](https://github.com/Kamazoh1/ai-for-developers-project-387/issues/22), [#23](https://github.com/Kamazoh1/ai-for-developers-project-387/issues/23)) ([055eedd](https://github.com/Kamazoh1/ai-for-developers-project-387/commit/055eedd41309ab22f7e644db73df3a01a5804728))
+* let guests leave a topic for the call ([#6](https://github.com/Kamazoh1/ai-for-developers-project-387/issues/6)) ([d8affb3](https://github.com/Kamazoh1/ai-for-developers-project-387/commit/d8affb387f181f305898ea550a2ff233dd550083))
+* let guests leave a topic for the call ([#6](https://github.com/Kamazoh1/ai-for-developers-project-387/issues/6)) ([b446a07](https://github.com/Kamazoh1/ai-for-developers-project-387/commit/b446a07d6d4100969d44a9a36f5e62805847ee2f))
+
+
+### Reverts
+
+* let guests leave a topic for the call ([#6](https://github.com/Kamazoh1/ai-for-developers-project-387/issues/6)) ([#13](https://github.com/Kamazoh1/ai-for-developers-project-387/issues/13)) ([7e0f204](https://github.com/Kamazoh1/ai-for-developers-project-387/commit/7e0f2048e72439119bd6cf8c75f937757e99b585))
+
 ## [0.3.0](https://github.com/Kamazoh1/ai-for-developers-project-386/compare/v0.2.0...v0.3.0) (2026-11-06)
 
 
