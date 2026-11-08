@@ -13,6 +13,7 @@ edited by the PR it judges. Tests: backend/tests/test_merge_gate.py. Standard li
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
@@ -220,6 +221,11 @@ def refusal_comment(login: str, head_sha: str, decision: Decision, run_url: str)
 def gh(*args: str, check: bool = True) -> str:
     done = subprocess.run(["gh", *args], capture_output=True, text=True, check=False)
     if check and done.returncode != 0:
+        # Say what GitHub answered: the exception alone shows only the exit code.
+        # The method and the endpoint, never the whole argument list: it holds comment bodies.
+        method = next((a for a in args if a in {"POST", "DELETE", "PATCH"}), "GET")
+        endpoint = next((a for a in args if a.startswith("repos/")), " ".join(args[:3]))
+        print(f"gh {method} {endpoint} failed: {done.stderr.strip()}", file=sys.stderr)
         raise subprocess.CalledProcessError(
             done.returncode, done.args, done.stdout, done.stderr
         )
@@ -295,7 +301,8 @@ def fetch_changed_files(repo: str, pr_number: int) -> list[str]:
 
 
 def comment(repo: str, pr_number: int, body: str) -> None:
-    # The issues API: it needs only `issues: write`, and a PR is an issue for comments.
+    # The issues API: a PR is an issue for comments. If the token may not do it, the log of `gh()`
+    # shows GitHub's answer.
     gh(
         "api",
         "-X",
@@ -414,18 +421,42 @@ def main() -> int:
     decision.notes.extend(warnings)
     if decision.ok:
         now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-        set_status(
-            repo,
-            head_sha,
-            "success",
-            f"approved by {sender_login} for {short}",
-            run_url,
-        )
-        comment(
-            repo,
-            pr_number,
-            approval_comment(sender_login, head_sha, now, decision, run_url),
-        )
+        recorded = False
+        try:
+            # The record first, the status after it: `success` never stands without its comment.
+            comment(
+                repo,
+                pr_number,
+                approval_comment(sender_login, head_sha, now, decision, run_url),
+            )
+            recorded = True
+            set_status(
+                repo,
+                head_sha,
+                "success",
+                f"approved by {sender_login} for {short}",
+                run_url,
+            )
+        except Exception:
+            with contextlib.suppress(Exception):
+                set_status(
+                    repo,
+                    head_sha,
+                    "error",
+                    "the gate could not record the approval: see the run",
+                    run_url,
+                )
+            if recorded:
+                with contextlib.suppress(Exception):
+                    # The approval comment stands in the thread: void it there too.
+                    comment(
+                        repo,
+                        pr_number,
+                        f"{marker(head_sha)}\n**The approval above is void: it was not recorded** "
+                        f"(the gate could not set its status for `{head_sha}`). Remove the label "
+                        f"`{LABEL}` and add it again to retry. Gate run: {run_url}",
+                    )
+            raise
         print(f"Approved {head_sha} by {sender_login}.")
         return 0
 
