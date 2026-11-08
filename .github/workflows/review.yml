@@ -3,6 +3,12 @@ name: review
 # Independent review of a pull request: a separate agent run that sees only the diff and the
 # criteria in REVIEW.md, not the session of whoever wrote the code. It comments, it never approves,
 # requests changes or pushes. See "Авторевью PR" in README.md.
+#
+# This file handles PR events only (opened / new commits). Comments are handled by claude.yml:
+# the interactive agent edits code there, and only when a human asks for it with @claude.
+#
+# Security: plain `pull_request` and no checkout of fork code. A fork PR gets no secrets, so it is
+# skipped. `pull_request_target` (secrets + PR code) is deliberately not used.
 
 on:
   pull_request:
@@ -16,11 +22,15 @@ concurrency:
 jobs:
   review:
     # Same-repository branches only (a fork PR gets no secrets anyway, and its code is untrusted),
-    # no drafts, and not the release-please PRs (version and changelog bumps only).
+    # from a trusted author, no drafts, and not the release-please PRs (version and changelog
+    # bumps only). A trusted author is a person with write access or the Claude app itself:
+    # PRs opened by the agent must be reviewed too, so bots are NOT filtered out by type.
     if: |
       github.event.pull_request.draft == false &&
       github.event.pull_request.head.repo.full_name == github.repository &&
-      !startsWith(github.event.pull_request.head.ref, 'release-please--')
+      !startsWith(github.event.pull_request.head.ref, 'release-please--') &&
+      (contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association) ||
+        github.event.pull_request.user.login == 'claude[bot]')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -37,6 +47,10 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           use_sticky_comment: "true" # one summary comment, updated on every push
+          # The action refuses runs started by a bot. When the interactive agent pushes to the PR
+          # branch, the event comes from these two actors; without this the review of an agent
+          # PR fails ("non-human actor"). The `if` above still limits runs to our own branches.
+          allowed_bots: "claude,github-actions"
           prompt: |
             Review pull request #${{ github.event.pull_request.number }} in ${{ github.repository }}.
 
@@ -56,4 +70,5 @@ jobs:
           claude_args: |
             --model claude-opus-5-5
             --max-turns 25
+            --disallowedTools "Edit,Write,MultiEdit,NotebookEdit,Bash(git push:*),Bash(git commit:*)"
             --allowedTools "Read,Grep,Glob,Bash(git show:*),Bash(git diff:*),Bash(git log:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),mcp__github_inline_comment__create_inline_comment"
