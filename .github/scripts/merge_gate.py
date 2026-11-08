@@ -13,6 +13,7 @@ edited by the PR it judges. Tests: backend/tests/test_merge_gate.py. Standard li
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
@@ -220,6 +221,8 @@ def refusal_comment(login: str, head_sha: str, decision: Decision, run_url: str)
 def gh(*args: str, check: bool = True) -> str:
     done = subprocess.run(["gh", *args], capture_output=True, text=True, check=False)
     if check and done.returncode != 0:
+        # Say what GitHub answered: the exception alone shows only the exit code.
+        print(f"gh {' '.join(args[:3])} failed: {done.stderr.strip()}", file=sys.stderr)
         raise subprocess.CalledProcessError(
             done.returncode, done.args, done.stdout, done.stderr
         )
@@ -414,18 +417,30 @@ def main() -> int:
     decision.notes.extend(warnings)
     if decision.ok:
         now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-        set_status(
-            repo,
-            head_sha,
-            "success",
-            f"approved by {sender_login} for {short}",
-            run_url,
-        )
-        comment(
-            repo,
-            pr_number,
-            approval_comment(sender_login, head_sha, now, decision, run_url),
-        )
+        try:
+            # The record first, the status after it: `success` never stands without its comment.
+            comment(
+                repo,
+                pr_number,
+                approval_comment(sender_login, head_sha, now, decision, run_url),
+            )
+            set_status(
+                repo,
+                head_sha,
+                "success",
+                f"approved by {sender_login} for {short}",
+                run_url,
+            )
+        except Exception:
+            with contextlib.suppress(Exception):
+                set_status(
+                    repo,
+                    head_sha,
+                    "error",
+                    "the gate could not record the approval: see the run",
+                    run_url,
+                )
+            raise
         print(f"Approved {head_sha} by {sender_login}.")
         return 0
 

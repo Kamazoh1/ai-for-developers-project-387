@@ -8,6 +8,7 @@ loaded by path.
 """
 
 import importlib.util
+import subprocess
 import sys
 from pathlib import Path
 
@@ -280,6 +281,7 @@ class Repo:
         self.comments = [verdict(0)]
         self.files = ["README.md"]
         self.browser = (True, "OK: the browser check passed", [])
+        self.comment_fails = False
         monkeypatch.setattr(gate, "gh", self.gh)
         monkeypatch.setattr(gate, "fetch_check_runs", lambda repo, sha: self.checks)
         monkeypatch.setattr(gate, "fetch_comments", lambda repo, number: self.comments)
@@ -293,6 +295,8 @@ class Repo:
 
         text = " ".join(args)
         self.calls.append(text)
+        if self.comment_fails and "issues/5/comments" in text and "-X POST" in text:
+            raise subprocess.CalledProcessError(1, args, "", "HTTP 403: Resource not accessible")
         if text.startswith("api repos/R/pulls/5") and "-X" not in text:
             return json.dumps(
                 {"state": "open", "draft": False, "title": "ci: x", "head": {"sha": HEAD}}
@@ -342,8 +346,9 @@ def test_a_person_labelling_a_green_head_approves_it(gate, monkeypatch, repo):
     assert fire(gate, monkeypatch, "labeled") == 0
 
     writes = repo.writes()
-    assert "state=success" in writes[0]
-    assert "issues/5/comments" in writes[1] and HEAD in writes[1] and "Kamazoh1" in writes[1]
+    # the record first, the status after it: `success` never stands without its comment
+    assert "issues/5/comments" in writes[0] and HEAD in writes[0] and "Kamazoh1" in writes[0]
+    assert "state=success" in writes[1]
     assert not any("DELETE" in w for w in writes)  # the label stays on an approved head
 
 
@@ -395,3 +400,24 @@ def test_a_head_that_never_got_a_status_is_made_pending_by_the_next_event(gate, 
 def test_other_labels_are_ignored(gate, monkeypatch, repo):
     assert fire(gate, monkeypatch, "labeled", LABEL_NAME="bug") == 0
     assert repo.writes() == []
+
+
+def test_an_approval_that_cannot_be_recorded_is_never_left_as_success(gate, monkeypatch, repo):
+    repo.comment_fails = True  # e.g. the token may not comment
+
+    with pytest.raises(subprocess.CalledProcessError):
+        fire(gate, monkeypatch, "labeled")
+
+    writes = repo.writes()
+    assert not any("state=success" in w for w in writes)
+    assert any("state=error" in w and "could not record" in w for w in writes)
+
+
+def test_a_failing_gh_call_shows_what_github_answered(gate, monkeypatch, capsys):
+    failed = subprocess.CompletedProcess([], 1, "", "HTTP 403: Resource not accessible")
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: failed)
+
+    with pytest.raises(subprocess.CalledProcessError):
+        gate.gh("api", "repos/x")
+
+    assert "HTTP 403" in capsys.readouterr().err
