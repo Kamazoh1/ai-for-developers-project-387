@@ -113,7 +113,7 @@ mise run e2e:url -- https://<имя-сервиса>.onrender.com
 Воркфлоу `.github/workflows/claude.yml` запускает [claude-code-action](https://github.com/anthropics/claude-code-action) по комментарию с `@claude` в issue, PR или ревью PR.
 
 - **Событие.** `issue_comment` и `pull_request_review_comment` с `types: [created]`, `pull_request_review` с `types: [submitted]` (у ревью нет типа `created`, `submitted` — тот же момент).
-- **Модель.** `claude-haiku-5-5` (последний Haiku), задана явно через `--model` в `claude_args`. Ключ лежит в GitHub Secrets: `CLAUDE_CODE_OAUTH_TOKEN`. Менять модель нужно в `claude.yml`.
+- **Модель.** `claude-sonnet-5-5` (последний Sonnet), задана явно через `--model` в `claude_args`. Ключ лежит в GitHub Secrets: `CLAUDE_CODE_OAUTH_TOKEN`. Менять модель нужно в `claude.yml`.
 - **Назначение.** Выполнить задачу из комментария по правилам из `AGENTS.md`: Conventional Commits, контракт `api/main.tsp` меняется первым, перед пушем зелёный `mise run check`. Скиллы (`.claude/skills`) и `docs/agents/` берутся из `main`, инструменты ставятся тем же `mise`, что и в `ci.yml`.
 - **Результаты.** Ответный комментарий от `claude[bot]` в том же issue или PR; если задача требует правок, ветка и PR от приложения; прогон виден во вкладке Actions (workflow `claude`).
 - **Кто может вызвать.** Только `OWNER`, `MEMBER` и `COLLABORATOR`. Комментарии ботов (в том числе ответы самого агента) под это условие не попадают: у них `author_association` другой. Репозиторий публичный, но форки секретов не получают: воркфлоу работает в контексте основной ветки, код из форка не выполняется.
