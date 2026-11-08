@@ -18,7 +18,8 @@ export const handlers = [
       start: string;
       guestName: string;
       guestEmail: string;
+      topic?: string;
     };
-    return HttpResponse.json(booking(body), { status: 201 });
+    return HttpResponse.json(booking({ ...body, topic: body.topic ?? "" }), { status: 201 });
   }),
 ];
