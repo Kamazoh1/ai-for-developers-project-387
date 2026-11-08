@@ -34,8 +34,11 @@ jobs:
     permissions:
       contents: read
       statuses: write # the commit status `merge-gate`
-      issues: write # the approval / refusal comment and removing the label (a PR is an issue here)
-      pull-requests: read # the changed files of the PR
+      issues: write # removing the label
+      # The approval / refusal comment on the PR. Evidence: with `issues: write` alone the call
+      # `POST /issues/{n}/comments` on a PR answered 403 "Resource not accessible by integration"
+      # (run 42519786108), whatever the documentation says.
+      pull-requests: write
       checks: read # the check runs of the head commit
       actions: read # the browser-check artifact
     steps:

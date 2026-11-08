@@ -301,8 +301,8 @@ def fetch_changed_files(repo: str, pr_number: int) -> list[str]:
 
 
 def comment(repo: str, pr_number: int, body: str) -> None:
-    # The issues API: a PR is an issue for comments. If the token may not do it, the log of `gh()`
-    # shows GitHub's answer.
+    # The issues API: a PR is an issue for comments. The token needs `pull-requests: write` for it
+    # (`issues: write` alone gets a 403), see merge-gate.yml.
     gh(
         "api",
         "-X",
