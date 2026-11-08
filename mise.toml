@@ -93,6 +93,10 @@ description = "Browser scenario on a real backend (temporary DB) and frontend; n
 depends = ["generate"]
 run = "npm test --prefix e2e"
 
+[tasks."browser-check:verify"]
+description = "Merge decision: the browser-check artifact of the PR's current head must match its head SHA and pass, e.g. `mise run browser-check:verify -- 14`"
+run = "python3 .github/scripts/browser_check.py verify"
+
 [tasks."e2e:url"]
 description = "The same browser scenario against a running app, e.g. `mise run e2e:url -- https://<name>.onrender.com`"
 run = "node e2e/remote.mjs"

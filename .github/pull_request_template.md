@@ -10,6 +10,7 @@
 - [ ] `mise run verify` is green (locally or in CI)
 - [ ] API change: `api/main.tsp` changed first, `mise run generate` run, `frontend/src/api` not edited by hand
 - [ ] New or changed behavior has a test (a bug fix has one that fails without the fix)
+- [ ] Browser check: `mise run browser-check:verify -- <PR>` says OK for the current head (a `feat` PR brings an `@main` scenario)
 - [ ] `GLOSSARY.md` / `docs/adr/` updated if a term or a decision changed
 - [ ] No secrets, tokens or `.env*` in the diff
 
