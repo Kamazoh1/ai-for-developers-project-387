@@ -78,8 +78,6 @@ type WindowProps = {
   selectedDate: string | null;
   onSelectDate: (date: string) => void;
   notice: string | null;
-  topic: string;
-  onTopicChange: (topic: string) => void;
   onBooked: (booking: Booking) => void;
   onSlotLost: (reason: "taken" | "unavailable") => void;
 };
@@ -91,8 +89,6 @@ function Window({
   selectedDate,
   onSelectDate,
   notice,
-  topic,
-  onTopicChange,
   onBooked,
   onSlotLost,
 }: WindowProps) {
@@ -156,8 +152,6 @@ function Window({
                 eventTypeId={eventTypeId}
                 start={chosen.start}
                 time={localTime(chosen.start)}
-                topic={topic}
-                onTopicChange={onTopicChange}
                 onBooked={onBooked}
                 onSlotLost={(reason) => {
                   setSelectedStart(null);
@@ -196,8 +190,6 @@ export function SlotPicker({
   const slots = useRequest(() => eventTypesApiSlots({ path: { id: eventTypeId } }), eventTypeId);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  // Kept here, not in the form: a slot lost to another guest must not cost the guest their text.
-  const [topic, setTopic] = useState("");
 
   return (
     <RequestBoundary request={slots} skeleton={<SlotsSkeleton />}>
@@ -212,8 +204,6 @@ export function SlotPicker({
             setNotice(null);
           }}
           notice={notice}
-          topic={topic}
-          onTopicChange={setTopic}
           onBooked={onBooked}
           onSlotLost={(reason) => {
             setNotice(SLOT_LOST[reason]);
