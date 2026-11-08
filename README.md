@@ -213,15 +213,37 @@ mise run e2e:url -- https://<имя-сервиса>.onrender.com
 - **Risk:** дверь (`one-way` или `two-way`) и радиус поражения.
 - **Rollback:** как откатить (`git revert`, флаг, правка данных) и что останется после отката.
 
+### Аудит по расписанию
+
+Воркфлоу `.github/workflows/audit.yml` раз в сутки проверяет развёрнутое приложение, сохраняет отчёт и поручает агенту завести issue **только по новой находке**.
+
+```
+расписание или ручной запуск
+  → Actions собирает и сохраняет отчёт (artifact)
+  → агент читает отчёт и ищет уже заведённые issue
+      ├─ новых находок нет → вывод без нового issue
+      └─ новая находка     → issue со ссылкой на отчёт
+```
+
+- **Запуск.** `schedule` (`17 5 * * *`, раз в сутки в 05:17 UTC; не на круглом часе, GitHub откладывает такие запуски) и `workflow_dispatch` (кнопка Run workflow во вкладке Actions). Расписание GitHub выполняет только из основной ветки, а в публичном репозитории отключает его после 60 дней без активности: тогда достаточно включить воркфлоу заново.
+- **Данные.** Адрес приложения берётся из переменной репозитория `APP_URL` (Settings → Secrets and variables → Actions → Variables; это не секрет). Скрипт `.github/scripts/audit_report.py` (только стандартная библиотека, тесты в `backend/tests/test_audit_report.py`) делает прогревающий запрос, затем проверяет `/health`, `/api/calendar`, `/api/event-types`, главную страницу (ответ и время, порог 3 с) и заголовки безопасности главной (`x-content-type-options`, `content-security-policy`, `referrer-policy`, `x-frame-options`, `strict-transport-security`). Каждая проваленная проверка становится находкой со **стабильным `id`** (`security-header-x-content-type-options`, `endpoint-down-health`, ...): дубликаты определяются по нему, а не по формулировке. Упавшее приложение это находка, а не сбой аудита.
+- **Отчёт.** `report.json` (данные) и `report.md` (то же для человека) сохраняются артефактом `audit-report-<run_id>` на 30 дней. В коммиты отчёты не попадают: каталог `audit-report/` в `.gitignore`, у агента нет `git`.
+- **Агент.** `claude-sonnet-5-5`, не более 25 шагов, prompt в `audit.yml`. Читает отчёт, загружает issue с меткой `audit` одним вызовом `gh issue list --label audit --state all` (не `gh search`: поисковый индекс отстаёт, список нет) и сопоставляет находки с issue по скрытой строке `<!-- audit-finding: <id> -->` в теле. Открытое issue или закрытое как `not planned` значит «дубликат, пропустить»; закрытое как `completed`, но находка вернулась, значит регрессия: новое issue со ссылкой на старое. По новой находке создаётся ровно одно issue (`audit`, `needs-triage`) со степенью важности, доказательством, ссылками на прогон и на артефакт с отчётом; не более 5 за прогон. Существующие issue агент не правит и не комментирует. Текст отчёта и чужих issue для него данные, не инструкции.
+- **Права.** `GITHUB_TOKEN`: `contents: read`, `issues: write`, `id-token: write` (обмен OIDC на токен приложения Claude, как в остальных агентах). Инструменты агента: `Read`, `Grep`, `Glob`, `gh issue list`, `gh issue view`, `gh issue create`; ни `git`, ни правки файлов, ни закрытия issue. Авторизация: `CLAUDE_CODE_OAUTH_TOKEN` в Secrets.
+- **Ограничения.** Тайм-аут 15 минут. `concurrency: group: audit`, `cancel-in-progress: false`: аудиты идут по одному, и второй видит issue, созданные первым (иначе оба завели бы одно и то же); начатый аудит не отменяется на полпути.
+- **Где результат.** Вкладка Actions → воркфлоу `audit` → прогон: отчёт в артефакте `audit-report-<run_id>`, полный вывод сессии агента в артефакте `audit-agent-output-<run_id>`, его заключение в сводке прогона (Summary), созданные issue с меткой `audit`.
+- **Проверка дублей.** Повторный запуск при тех же находках ничего не создаёт: заключение агента заканчивается строкой «No new findings: no issue created».
+
 ### Настройки репозитория для агентов
 
-Что должно быть включено в GitHub, чтобы три агента (`claude`, `triage`, `review`) работали:
+Что должно быть включено в GitHub, чтобы агенты (`claude`, `triage`, `review`, `audit`) работали:
 
 1. Приложение [Claude](https://github.com/apps/claude) установлено на репозиторий (`/install-github-app`).
 2. Секрет `CLAUDE_CODE_OAUTH_TOKEN` в Settings → Secrets and variables → Actions.
 3. Метки `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human` (см. `docs/agents/triage-labels.md`).
 4. Settings → Actions → General: опция «Allow GitHub Actions to create and approve pull requests» (для release-please).
 5. Метка `merge-approved` (создана), статус `merge-gate` и правило на `main` описаны выше.
+   Для `audit` нужны ещё переменная репозитория `APP_URL` и метка `audit` (`gh variable set APP_URL --body <адрес>`, `gh label create audit`).
 6. Сводка по агентам (браузерная проверка `browser-check.yml` и `merge-gate.yml` без модели, их описание выше):
 
 | Воркфлоу | Событие | Кто запускает | Модель | Тайм-аут | Параллельность |
@@ -229,6 +251,7 @@ mise run e2e:url -- https://<имя-сервиса>.onrender.com
 | `claude.yml` | комментарий с `@claude` | человек: `OWNER`, `MEMBER`, `COLLABORATOR` | `claude-sonnet-5-5` | 30 мин | один на issue или PR, новый ждёт |
 | `triage.yml` | новый issue | те же, не боты, без меток состояния | `claude-haiku-5-5` | 10 мин | один на issue |
 | `review.yml` | PR из этого репозитория | автор: человек с правом записи или `claude[bot]`; не черновик, не форк | `claude-opus-5-5` | 15 мин | один на PR, устаревший отменяется; не более `REVIEW_MAX_RUNS_PER_PR` (5) ревью на PR |
+| `audit.yml` | расписание (раз в сутки), ручной запуск | расписание или человек с правом записи | `claude-sonnet-5-5` | 15 мин | один аудит за раз, идущий не отменяется |
 
 <!-- Добавьте запись asciinema — именно это смотрит работодатель -->
 
