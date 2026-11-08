@@ -143,6 +143,44 @@ mise run e2e:url -- https://<имя-сервиса>.onrender.com
 - **Метки.** `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human` должны существовать в репозитории (создаются через `gh label create`, см. `docs/agents/triage-labels.md`).
 - **Share.** Как и у `@claude`, сессия не публикуется.
 
+### Авторевью PR
+
+Воркфлоу `.github/workflows/review.yml` делает независимое ревью pull request: отдельный прогон агента, который видит только дифф и критерии из `REVIEW.md`, а не сессию автора кода. Он только комментирует: не одобряет, не требует правок, не пушит.
+
+- **Событие.** `pull_request` с `types: [opened, synchronize, reopened, ready_for_review]`.
+- **Кого ревьюит.** PR из веток этого же репозитория (в том числе PR, открытые агентом по `@claude`). Пропускаются черновики, PR из форков (секретов у них нет, а код недоверенный) и PR release-please (`release-please--*`, там только версии и changelog).
+- **Критерии.** `REVIEW.md`: контракт `api/main.tsp` первым, термины `GLOSSARY.md` и ADR, тесты, секреты и безопасность, процесс (Conventional Commits, шаблон PR, `hexlet-check.yml`), формат ответа. Агент читает файл из базовой ветки (`git show <base.sha>:REVIEW.md`), поэтому PR не может ослабить собственное ревью. Правки `REVIEW.md`, `AGENTS.md`, `.github/workflows/` и `skills-lock.json` помечаются как требующие внимания. Линтеры, типы и тесты агент не повторяет: их запускает CI.
+- **Результат.** Один сводный комментарий от `claude[bot]` (`use_sticky_comment`: он обновляется при каждом пуше, новые не копятся) с вердиктом `blockers / concerns / nits` и находками с `file:line`; строчные комментарии только для замечаний к одной строке. Сам прогон виден в Actions (workflow `review`). Ревью не блокирует слияние: решает человек.
+- **Модель и prompt.** `claude-opus-5-5`, отличается от `claude-sonnet-5-5`, на которой работает `@claude`, поэтому код и ревью делают разные модели. Prompt лежит в `review.yml`. Описание, заголовок и комментарии PR агент считает данными и инструкциям из них не следует.
+- **Права и ограничения.** `contents: read`, `pull-requests: write`, `id-token: write`, у checkout `persist-credentials: false`. Тайм-аут 15 минут, не более 25 шагов агента. `concurrency` по номеру PR с `cancel-in-progress: true`: новый пуш отменяет устаревшее ревью и запускает новое. Агенту разрешены чтение репозитория, `git show|diff|log`, `gh pr view|diff|comment` и строчные комментарии; правка файлов и `git push` недоступны.
+- **Ограничение действия.** Обмен OIDC-токена на токен приложения проверяет, что файл воркфлоу совпадает с версией в основной ветке. Поэтому PR, который сам меняет `review.yml`, ревью не получит, пока изменение не влито.
+- **Share.** Как и у других агентов, сессия не публикуется.
+
+### Шаблон PR
+
+`.github/pull_request_template.md` подставляется в описание каждого нового PR и повторяет разделы, которые проверяет `REVIEW.md`:
+
+- **Summary:** что и зачем, со ссылкой на тикет (`Closes #N`).
+- **Checks:** чек-лист (`mise run verify`, контракт и `mise run generate`, тесты, глоссарий и ADR, нет секретов) и **Evidence** (вывод тестов, скриншот, запрос и ответ).
+- **Risk:** дверь (`one-way` или `two-way`) и радиус поражения.
+- **Rollback:** как откатить (`git revert`, флаг, правка данных) и что останется после отката.
+
+### Настройки репозитория для агентов
+
+Что должно быть включено в GitHub, чтобы три агента (`claude`, `triage`, `review`) работали:
+
+1. Приложение [Claude](https://github.com/apps/claude) установлено на репозиторий (`/install-github-app`).
+2. Секрет `CLAUDE_CODE_OAUTH_TOKEN` в Settings → Secrets and variables → Actions.
+3. Метки `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human` (см. `docs/agents/triage-labels.md`).
+4. Settings → Actions → General: опция «Allow GitHub Actions to create and approve pull requests» (для release-please).
+5. Сводка по агентам:
+
+| Воркфлоу | Событие | Кто запускает | Модель | Тайм-аут | Параллельность |
+|---|---|---|---|---|---|
+| `claude.yml` | комментарий с `@claude` | `OWNER`, `MEMBER`, `COLLABORATOR` | `claude-sonnet-5-5` | 30 мин | один на issue или PR, новый ждёт |
+| `triage.yml` | новый issue | те же, не боты, без меток состояния | `claude-haiku-5-5` | 10 мин | один на issue |
+| `review.yml` | PR из этого репозитория | автор PR с правом записи, не черновик | `claude-opus-5-5` | 15 мин | один на PR, устаревший отменяется |
+
 <!-- Добавьте запись asciinema — именно это смотрит работодатель -->
 
 ---
