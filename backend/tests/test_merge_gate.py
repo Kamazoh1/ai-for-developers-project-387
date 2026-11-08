@@ -282,6 +282,7 @@ class Repo:
         self.files = ["README.md"]
         self.browser = (True, "OK: the browser check passed", [])
         self.comment_fails = False
+        self.success_status_fails = False
         monkeypatch.setattr(gate, "gh", self.gh)
         monkeypatch.setattr(gate, "fetch_check_runs", lambda repo, sha: self.checks)
         monkeypatch.setattr(gate, "fetch_comments", lambda repo, number: self.comments)
@@ -295,6 +296,8 @@ class Repo:
 
         text = " ".join(args)
         self.calls.append(text)
+        if self.success_status_fails and "state=success" in text:
+            raise subprocess.CalledProcessError(1, args, "", "HTTP 500")
         if self.comment_fails and "issues/5/comments" in text and "-X POST" in text:
             raise subprocess.CalledProcessError(1, args, "", "HTTP 403: Resource not accessible")
         if text.startswith("api repos/R/pulls/5") and "-X" not in text:
@@ -421,3 +424,31 @@ def test_a_failing_gh_call_shows_what_github_answered(gate, monkeypatch, capsys)
         gate.gh("api", "repos/x")
 
     assert "HTTP 403" in capsys.readouterr().err
+
+
+def test_a_comment_without_its_status_is_marked_void_in_the_thread(gate, monkeypatch, repo):
+    repo.success_status_fails = True  # the comment is posted, then the status cannot be set
+
+    with pytest.raises(subprocess.CalledProcessError):
+        fire(gate, monkeypatch, "labeled")
+
+    writes = repo.writes()
+    assert any("state=error" in w for w in writes)
+    comments = [w for w in writes if "issues/5/comments" in w]
+    assert len(comments) == 2  # the approval, then a note that it was not recorded
+    assert "Merge approved" in comments[0]
+    assert "not recorded" in comments[1] and "void" in comments[1]
+
+
+def test_the_log_of_a_failing_call_names_the_endpoint_but_not_the_comment_body(
+    gate, monkeypatch, capsys
+):
+    failed = subprocess.CompletedProcess([], 1, "", "HTTP 403")
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: failed)
+
+    with pytest.raises(subprocess.CalledProcessError):
+        gate.gh("api", "-X", "POST", "repos/R/issues/5/comments", "-f", "body=SECRET TEXT")
+
+    err = capsys.readouterr().err
+    assert "POST" in err and "repos/R/issues/5/comments" in err and "HTTP 403" in err
+    assert "SECRET TEXT" not in err

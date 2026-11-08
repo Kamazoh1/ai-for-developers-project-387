@@ -34,8 +34,8 @@ jobs:
     permissions:
       contents: read
       statuses: write # the commit status `merge-gate`
-      issues: write # removing the label
-      pull-requests: write # the approval / refusal comment on the PR (issues: write was not enough)
+      issues: write # the approval / refusal comment and removing the label (a PR is an issue here)
+      pull-requests: read # the changed files of the PR
       checks: read # the check runs of the head commit
       actions: read # the browser-check artifact
     steps:
