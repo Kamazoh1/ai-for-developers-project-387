@@ -1,7 +1,8 @@
 ## Summary
 
 <!-- What changes and why, in the words of GLOSSARY.md. A diagram, call tree or diff sketch beats prose.
-     Reference the ticket the commit closes: Closes #N -->
+     Reference the ticket: `Closes #N` (the ticket says `Part of #<spec>`) or `Spec: #<spec>`. A `feat` PR
+     without a spec by a trusted author is not reviewed: the review compares the result with the spec. -->
 
 ## Checks
 
