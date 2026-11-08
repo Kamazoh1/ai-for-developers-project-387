@@ -161,14 +161,22 @@ class Api:
         assert exchange.status == 201
         return exchange.body
 
-    def book(self, slug: str = "intro", start: str = "2026-11-06T10:00:00+03:00") -> Exchange:
+    def book(
+        self,
+        slug: str = "intro",
+        start: str = "2026-11-06T10:00:00+03:00",
+        topic: str | None = None,
+        request_is_valid: bool = True,
+    ) -> Exchange:
         body = {
             "eventTypeId": slug,
             "start": start,
             "guestName": "Ada Lovelace",
             "guestEmail": "ada@example.com",
         }
-        return self.call("POST", "/api/bookings", body)
+        if topic is not None:
+            body["topic"] = topic
+        return self.call("POST", "/api/bookings", body, request_is_valid=request_is_valid)
 
 
 def _json_headers(payload: bytes | None) -> dict[str, str]:
@@ -289,7 +297,7 @@ def create_event_type_while_the_database_is_locked(make_client, wrap, tmp_path):
 def create_booking(make_client, wrap, tmp_path):
     api = wrap(make_client(now=NOW))
     api.create_event_type()
-    return api.book()
+    return api.book(topic="Обсудить релиз")  # the strict response check sees a real topic
 
 
 @scenario("POST", "/api/bookings", 409, "slot_taken")
@@ -357,6 +365,21 @@ def test_the_app_answers_as_the_contract_declares(
         scenario.status,
         scenario.code,
     )
+
+
+def test_the_contract_and_the_app_agree_on_how_long_a_topic_may_be(
+    make_client: ClientFactory, openapi: OpenAPI, contract: dict[str, Any]
+) -> None:
+    api = Api(make_client(now=NOW), openapi, contract)
+    api.create_event_type()
+
+    longest = api.book(topic="т" * 500)  # valid for the contract, accepted by the app
+    too_long = api.book(
+        start="2026-11-06T10:30:00+03:00", topic="т" * 501, request_is_valid=False
+    )  # rejected by the contract, refused by the app
+
+    assert longest.status == 201 and longest.body["topic"] == "т" * 500
+    assert (too_long.status, too_long.code) == (422, "validation_error")
 
 
 def test_every_declared_status_has_a_scenario(contract: dict[str, Any]) -> None:
