@@ -46,6 +46,7 @@ function BookingCard({
           <Text size="sm" c="dimmed">
             {booking.guestEmail}
           </Text>
+          {booking.topic && <Text size="sm">{`Тема: ${booking.topic}`}</Text>}
         </Stack>
         <Stack gap={4} align="flex-end">
           <Badge variant="light">{typeName}</Badge>

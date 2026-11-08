@@ -73,7 +73,10 @@ describe("booking a slot", () => {
       start: "2026-11-06T09:00:00+03:00",
       guestName: "Мария",
       guestEmail: "maria@example.com",
+      topic: "",
     });
+    // No topic was left: the confirmation has no "Тема" line.
+    expect(within(confirmation).queryByText(/Тема:/)).not.toBeInTheDocument();
     expect(within(confirmation).getByText("Знакомство")).toBeVisible();
     expect(within(confirmation).getByText(/6 ноября, пятница/)).toBeVisible();
     expect(within(confirmation).getByText(/09:00 – 09:30.*МСК/)).toBeVisible();
@@ -82,6 +85,66 @@ describe("booking a slot", () => {
     expect(screen.queryByRole("form")).not.toBeInTheDocument();
     expect(screen.queryByRole("group", { name: "Дни записи" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /К выбору типа/ })).toHaveAttribute("href", "/book");
+  });
+
+  it("sends the optional topic and shows it on the confirmation", async () => {
+    let sent: { topic?: string } = {};
+    server.use(
+      http.get(SLOTS, () => HttpResponse.json(slotWindow({ "2026-11-06": [["09:00", "09:30"]] }))),
+      http.post(BOOKINGS, async ({ request }) => {
+        sent = (await request.json()) as { topic?: string };
+        return HttpResponse.json(booking({ topic: "Обсудить <b>релиз</b>" }), { status: 201 });
+      }),
+    );
+    await pickFirstSlot();
+    await userEvent.type(screen.getByLabelText("Тема (необязательно)"), "Обсудить <b>релиз</b>");
+
+    await fillAndSubmit();
+
+    const confirmation = await screen.findByRole("region", { name: "Запись подтверждена" });
+    expect(sent.topic).toBe("Обсудить <b>релиз</b>");
+    // Plain text: the markup is shown as typed, not rendered.
+    expect(within(confirmation).getByText("Тема: Обсудить <b>релиз</b>")).toBeVisible();
+  });
+
+  it("keeps the typed topic when the slot is taken and another one is chosen", async () => {
+    server.use(
+      http.get(SLOTS, () =>
+        HttpResponse.json(
+          slotWindow({
+            "2026-11-06": [
+              ["09:00", "09:30"],
+              ["10:00", "10:30"],
+            ],
+          }),
+        ),
+      ),
+      http.post(BOOKINGS, () => error(409, "slot_taken")),
+    );
+    await pickFirstSlot();
+    await userEvent.type(screen.getByLabelText("Тема (необязательно)"), "Про релиз");
+    await fillAndSubmit();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Это время уже занято");
+
+    await userEvent.click(await screen.findByRole("button", { name: "10:00 – 10:30" }));
+
+    expect(screen.getByLabelText("Тема (необязательно)")).toHaveValue("Про релиз");
+  });
+
+  it("shows a too long topic as a field error and keeps the text", async () => {
+    server.use(
+      http.post(BOOKINGS, () =>
+        error(422, "validation_error", { fields: [{ field: "topic", message: "too long" }] }),
+      ),
+    );
+    await pickFirstSlot();
+    await userEvent.type(screen.getByLabelText("Тема (необязательно)"), "длинная");
+
+    await fillAndSubmit();
+
+    const topic = screen.getByLabelText("Тема (необязательно)");
+    expect(topic).toHaveAccessibleDescription("Не длиннее 500 символов");
+    expect(topic).toHaveValue("длинная");
   });
 
   it("shows server validation errors under the fields and keeps what was typed", async () => {
