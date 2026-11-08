@@ -47,7 +47,7 @@ function BookingCard({
             {booking.guestEmail}
           </Text>
           {booking.topic && (
-            <Text size="sm" style={{ overflowWrap: "anywhere" }}>
+            <Text size="sm" style={{ overflowWrap: "anywhere", whiteSpace: "pre-line" }}>
               {`Тема: ${booking.topic}`}
             </Text>
           )}

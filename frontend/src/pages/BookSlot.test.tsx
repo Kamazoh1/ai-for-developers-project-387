@@ -107,6 +107,21 @@ describe("booking a slot", () => {
     expect(within(confirmation).getByText("Тема: Обсудить <b>релиз</b>")).toBeVisible();
   });
 
+  it("keeps the line breaks of the topic on the confirmation", async () => {
+    server.use(
+      http.get(SLOTS, () => HttpResponse.json(slotWindow({ "2026-11-06": [["09:00", "09:30"]] }))),
+      http.post(BOOKINGS, () =>
+        HttpResponse.json(booking({ topic: "Первое\nВторое" }), { status: 201 }),
+      ),
+    );
+    await pickFirstSlot();
+
+    await fillAndSubmit();
+
+    const confirmation = await screen.findByRole("region", { name: "Запись подтверждена" });
+    expect(within(confirmation).getByText(/Тема: Первое/)).toHaveStyle({ whiteSpace: "pre-line" });
+  });
+
   it("keeps the typed topic when the slot is taken and another one is chosen", async () => {
     server.use(
       http.get(SLOTS, () =>

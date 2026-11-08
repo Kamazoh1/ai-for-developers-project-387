@@ -60,6 +60,16 @@ describe("upcoming meetings page", () => {
     expect(within(withoutTopic).queryByText(/Тема:/)).not.toBeInTheDocument();
   });
 
+  it("keeps the line breaks the guest typed in the topic", async () => {
+    backendWith([booking({ id: 1, guestName: "Анна", topic: "Первое\nВторое" })]);
+
+    renderApp("/admin/bookings");
+
+    const [card] = await screen.findAllByRole("article");
+    // `pre-line` shows the break; without it the browser folds the text into one line.
+    expect(within(card).getByText(/Тема: Первое/)).toHaveStyle({ whiteSpace: "pre-line" });
+  });
+
   it("lists meetings in the order the server returns them and shows long durations in hours", async () => {
     backendWith([
       booking({

@@ -42,7 +42,9 @@ function Confirmation({
         <Text c="dimmed">{`Вы записаны к: ${owner}`}</Text>
         <Text c="dimmed">{`${booking.guestName}, ${booking.guestEmail}`}</Text>
         {booking.topic && (
-          <Text style={{ overflowWrap: "anywhere" }}>{`Тема: ${booking.topic}`}</Text>
+          <Text style={{ overflowWrap: "anywhere", whiteSpace: "pre-line" }}>
+            {`Тема: ${booking.topic}`}
+          </Text>
         )}
       </Stack>
     </Paper>
