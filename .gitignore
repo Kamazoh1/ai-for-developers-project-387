@@ -22,3 +22,6 @@ frontend/src/api/
 .idea/
 .vscode/
 .DS_Store
+
+# audit reports (audit.yml): an artifact of the run, never a commit
+audit-report/
