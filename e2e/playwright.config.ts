@@ -10,7 +10,10 @@ export default defineConfig({
   workers: 1,
   fullyParallel: false,
   retries: 0,
-  reporter: [["list"]],
+  // The independent browser check (browser-check.yml) also wants a JSON report to build its artifact.
+  reporter: process.env.E2E_JSON_REPORT
+    ? [["list"], ["json", { outputFile: process.env.E2E_JSON_REPORT }]]
+    : [["list"]],
   use: {
     baseURL,
     locale: "ru-RU",

@@ -1,7 +1,8 @@
 ## Summary
 
 <!-- What changes and why, in the words of GLOSSARY.md. A diagram, call tree or diff sketch beats prose.
-     Reference the ticket the commit closes: Closes #N -->
+     Reference the ticket: `Closes #N` (the ticket says `Part of #<spec>`) or `Spec: #<spec>`. A `feat` PR
+     without a spec by a trusted author is not reviewed: the review compares the result with the spec. -->
 
 ## Checks
 
@@ -10,8 +11,12 @@
 - [ ] `mise run verify` is green (locally or in CI)
 - [ ] API change: `api/main.tsp` changed first, `mise run generate` run, `frontend/src/api` not edited by hand
 - [ ] New or changed behavior has a test (a bug fix has one that fails without the fix)
+- [ ] Browser check: `mise run browser-check:verify -- <PR>` says OK for the current head (a `feat` PR brings an `@main` scenario)
 - [ ] `GLOSSARY.md` / `docs/adr/` updated if a term or a decision changed
 - [ ] No secrets, tokens or `.env*` in the diff
+
+<!-- The merge decision is a person's, once the checks are green: add the label `merge-approved`
+     (`gh issue edit <PR> --add-label merge-approved`). `merge-gate` records who approved which SHA. -->
 
 **Evidence:** <!-- before / after: test output, screenshot, request and response -->
 

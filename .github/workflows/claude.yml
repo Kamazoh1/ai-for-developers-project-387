@@ -1,6 +1,8 @@
 name: claude
 
 # Call the agent from a comment: write `@claude <task>` in an issue, a PR or a PR review.
+# This file handles comment events only, and only a person's command makes the agent edit code.
+# Reviews of pull requests (opened / new commits, including the agent's own PRs) are review.yml.
 # Needs the Claude GitHub App on the repository and the CLAUDE_CODE_OAUTH_TOKEN secret
 # (both are set up by `/install-github-app`).
 
@@ -19,16 +21,20 @@ concurrency:
 
 jobs:
   claude:
-    # Only people with write access can call the agent (the repository is public), and only when
-    # the comment mentions @claude.
+    # Only people with write access can call the agent (the repository is public), only when the
+    # comment mentions @claude, and only a person: replies of the review agent and other bots
+    # never start an edit.
     if: |
       (github.event_name == 'issue_comment' &&
+        github.event.comment.user.type == 'User' &&
         contains(github.event.comment.body, '@claude') &&
         contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
       (github.event_name == 'pull_request_review_comment' &&
+        github.event.comment.user.type == 'User' &&
         contains(github.event.comment.body, '@claude') &&
         contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
       (github.event_name == 'pull_request_review' &&
+        github.event.review.user.type == 'User' &&
         contains(github.event.review.body, '@claude') &&
         contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.review.author_association))
     runs-on: ubuntu-latest
