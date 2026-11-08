@@ -14,7 +14,10 @@ on:
   pull_request_target:
     types: [opened, reopened, synchronize, ready_for_review, labeled, unlabeled]
 
-# One run at a time per PR, in order; a running run is never cancelled, or a reset could be lost.
+# One run at a time per PR, a running run is never cancelled. GitHub does drop a run that is merely
+# queued when newer ones join the group, so a dropped reset is repaired by the next event: a head
+# without a status is made `pending` on the next `unlabeled`, and an approval always re-checks the
+# real head.
 concurrency:
   group: merge-gate-${{ github.event.pull_request.number }}
   cancel-in-progress: false
@@ -31,8 +34,8 @@ jobs:
     permissions:
       contents: read
       statuses: write # the commit status `merge-gate`
-      pull-requests: write # the approval / refusal comment
-      issues: write # removing the label
+      issues: write # the approval / refusal comment and removing the label (a PR is an issue here)
+      pull-requests: read # the changed files of the PR
       checks: read # the check runs of the head commit
       actions: read # the browser-check artifact
     steps:

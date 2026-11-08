@@ -61,4 +61,4 @@ A `feat` PR is reviewed against its spec, not only against the code around it. T
 
 ## Output
 
-One summary comment: a verdict line (`blockers: N, concerns: N, nits: N`), the **Spec check** (one line per requirement: met / not met, with the proof), then the findings, each with `file:line`, what is wrong, the criterion it breaks and a concrete fix. Inline comments only for findings tied to one line. If there is nothing to report, say what was checked. Do not approve or request changes: the verdict is advice for the human who merges.
+One summary comment. Its first line is exactly `Review of head `<first 7 characters of the head SHA>`: blockers: N, concerns: N, nits: N` (the merge gate reads the blockers from that line, for that commit, and nothing else counts as the verdict). Then the **Spec check** (one line per requirement: met / not met, with the proof), then the findings, each with `file:line`, what is wrong, the criterion it breaks and a concrete fix. Inline comments only for findings tied to one line. If there is nothing to report, say what was checked. Do not approve or request changes: the verdict is advice for the human who merges.

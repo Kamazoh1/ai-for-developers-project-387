@@ -24,9 +24,27 @@ from pathlib import Path
 
 LABEL = "merge-approved"
 CONTEXT = "merge-gate"
-REQUIRED_CHECKS = ("verify", "image", "browser-check", "review")
+# A required check counts only when it comes from this workflow file: a PR can add a workflow with a
+# job of the same name that always succeeds, and a name alone would not tell them apart.
+EXPECTED_WORKFLOW = {
+    "verify": ".github/workflows/ci.yml",
+    "image": ".github/workflows/ci.yml",
+    "browser-check": ".github/workflows/browser-check.yml",
+    "review": ".github/workflows/review.yml",
+}
+REQUIRED_CHECKS = tuple(EXPECTED_WORKFLOW)
+# Files that change the review itself: a PR touching them may get no verdict from it.
+REVIEW_FILES = (
+    ".github/workflows/review.yml",
+    "REVIEW.md",
+    ".github/scripts/spec_link.py",
+    ".github/scripts/review_limit.py",
+)
 WRITE_LEVELS = {"write", "maintain", "admin"}
-BLOCKERS = re.compile(r"blockers:\s*(\d+)", re.IGNORECASE)
+# The first line of the review comment (REVIEW.md "Output"): it names the commit it is about.
+VERDICT = re.compile(
+    r"^\W*Review of head\W*([0-9a-f]{7,40})\b[^\n]*?blockers:\s*(\d+)", re.MULTILINE
+)
 
 
 @dataclass
@@ -47,11 +65,14 @@ def status_description(text: str) -> str:
 
 
 def latest_runs(check_runs: list[dict]) -> dict[str, dict]:
-    """The latest run of every check name: a re-run replaces the earlier one."""
+    """The latest run of every required check, from its own workflow only; a re-run replaces it."""
     latest: dict[str, dict] = {}
     for run in check_runs:
+        if run.get("workflow") != EXPECTED_WORKFLOW.get(run["name"]):
+            continue
         known = latest.get(run["name"])
-        if known is None or run["started_at"] > known["started_at"]:
+        started = run.get("started_at") or ""
+        if known is None or started > (known.get("started_at") or ""):
             latest[run["name"]] = run
     return latest
 
@@ -70,21 +91,20 @@ def check_problems(check_runs: list[dict]) -> list[str]:
     return problems
 
 
-def review_blockers(comments: list[dict], review_started_at: str | None) -> int | None:
-    """Blockers in the newest review comment written since the review run of this commit started."""
-    if review_started_at is None:
-        return None
-    fresh = [
-        comment
-        for comment in comments
-        if comment["user"]["login"] == "claude[bot]"
-        and comment["created_at"] >= review_started_at
-        and BLOCKERS.search(comment["body"])
-    ]
-    if not fresh:
-        return None
-    newest = max(fresh, key=lambda comment: comment["created_at"])
-    return int(BLOCKERS.search(newest["body"]).group(1))  # type: ignore[union-attr]
+def review_blockers(comments: list[dict], head_sha: str) -> int | None:
+    """Blockers in the newest review comment that names this head commit, or None.
+
+    Only the verdict line counts (`Review of head <sha>: blockers: N, ...`): the interactive
+    agent also posts as claude[bot], and a reply that says "blockers: 0" must not pass for it.
+    """
+    verdicts = []
+    for comment in comments:
+        if comment["user"]["login"] != "claude[bot]":
+            continue
+        found = VERDICT.search(comment["body"])
+        if found and head_sha.startswith(found.group(1)):
+            verdicts.append((comment["created_at"], int(found.group(2))))
+    return max(verdicts)[1] if verdicts else None
 
 
 def decide(
@@ -98,6 +118,7 @@ def decide(
     current_head_sha: str,
     check_runs: list[dict],
     comments: list[dict],
+    changed_files: list[str],
     browser_ok: bool,
     browser_message: str,
 ) -> Decision:
@@ -123,21 +144,34 @@ def decide(
     if not browser_ok:
         decision.reasons.append(browser_message)
 
-    review_run = latest_runs(check_runs).get("review")
-    blockers = review_blockers(
-        comments, review_run["started_at"] if review_run else None
-    )
+    blockers = review_blockers(comments, current_head_sha)
     if blockers is None:
-        decision.notes.append(
-            "no review verdict was written for this commit (a PR that changes the review "
-            "workflow itself is not reviewed by it): decide on the diff yourself"
+        message = (
+            f"no review verdict for this commit: the review wrote no `Review of head "
+            f"{current_head_sha[:7]}` summary"
         )
+        if any(name in REVIEW_FILES for name in changed_files):
+            decision.notes.append(
+                f"{message}. This PR changes the review itself, which then reviews nothing: "
+                "decide on the diff yourself"
+            )
+        else:
+            decision.reasons.append(message)
     elif blockers > 0:
         decision.reasons.append(
             f"the review of this commit reports {blockers} blocker(s)"
         )
     else:
         decision.checked.append("review verdict: 0 blockers")
+
+    workflows = [
+        name for name in changed_files if name.startswith(".github/workflows/")
+    ]
+    if workflows:
+        decision.notes.append(
+            f"this PR changes workflow files ({', '.join(workflows)}): a workflow can write "
+            "commit statuses and comments like this gate; read them before merging"
+        )
 
     decision.checked[:0] = [f"{name}: success" for name in REQUIRED_CHECKS]
     decision.ok = not decision.reasons
@@ -199,10 +233,22 @@ def json_lines(path: str, jq: str) -> list[dict]:
 
 
 def fetch_check_runs(repo: str, sha: str) -> list[dict]:
-    return json_lines(
-        f"repos/{repo}/commits/{sha}/check-runs?per_page=100",
-        ".check_runs[] | {name, status, conclusion, started_at}",
+    """Jobs of the required workflows on this commit, each tagged with its workflow file."""
+    jobs: list[dict] = []
+    wanted = set(EXPECTED_WORKFLOW.values())
+    runs = json_lines(
+        f"repos/{repo}/actions/runs?head_sha={sha}&event=pull_request&per_page=100",
+        ".workflow_runs[] | {id, path}",
     )
+    for run in runs:
+        if run["path"] not in wanted:
+            continue
+        for job in json_lines(
+            f"repos/{repo}/actions/runs/{run['id']}/jobs?per_page=100",
+            ".jobs[] | {name, status, conclusion, started_at}",
+        ):
+            jobs.append({**job, "workflow": run["path"]})
+    return jobs
 
 
 def fetch_comments(repo: str, pr_number: int) -> list[dict]:
@@ -237,8 +283,27 @@ def current_state(repo: str, sha: str) -> str | None:
     return None
 
 
+def fetch_changed_files(repo: str, pr_number: int) -> list[str]:
+    out = gh(
+        "api",
+        "--paginate",
+        f"repos/{repo}/pulls/{pr_number}/files?per_page=100",
+        "--jq",
+        ".[].filename",
+    )
+    return out.split()
+
+
 def comment(repo: str, pr_number: int, body: str) -> None:
-    gh("pr", "comment", str(pr_number), "--repo", repo, "--body", body)
+    # The issues API: it needs only `issues: write`, and a PR is an issue for comments.
+    gh(
+        "api",
+        "-X",
+        "POST",
+        f"repos/{repo}/issues/{pr_number}/comments",
+        "-f",
+        f"body={body}",
+    )
 
 
 def remove_label(repo: str, pr_number: int) -> None:
@@ -279,7 +344,8 @@ def main() -> int:
 
     sender_login = os.environ["SENDER_LOGIN"]
     if action == "unlabeled":
-        if current_state(repo, head_sha) == "success":
+        state = current_state(repo, head_sha)
+        if state == "success":
             set_status(
                 repo,
                 head_sha,
@@ -288,6 +354,15 @@ def main() -> int:
                 run_url,
             )
             print(f"Approval of {short} withdrawn by {sender_login}.")
+        elif state is None:
+            # A queued reset can be dropped when newer events join the group: reconcile here.
+            set_status(
+                repo,
+                head_sha,
+                "pending",
+                f"waiting for a human approval of {short}",
+                run_url,
+            )
         return 0
     if action != "labeled":
         return 0
@@ -307,6 +382,7 @@ def main() -> int:
         )
     check_runs = fetch_check_runs(repo, head_sha)
     comments = fetch_comments(repo, pr_number)
+    changed_files = fetch_changed_files(repo, pr_number)
     try:
         sys.path.insert(0, str(Path(__file__).resolve().parent))
         import browser_check
@@ -331,6 +407,7 @@ def main() -> int:
         current_head_sha=head_sha,
         check_runs=check_runs,
         comments=comments,
+        changed_files=changed_files,
         browser_ok=browser_ok,
         browser_message=browser_message,
     )

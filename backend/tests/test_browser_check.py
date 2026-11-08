@@ -240,3 +240,50 @@ def test_an_email_address_in_a_title_is_not_a_tag(browser_check):
     (scenario,) = browser_check.scenarios_from_report(rep)
 
     assert scenario.tags == ("adjacent",)
+
+
+# --- verify_pr: finding the artifact of the current head ------------------------------------------
+
+
+def test_verify_pr_downloads_the_artifact_of_the_current_head_and_assesses_it(
+    browser_check, tmp_path, monkeypatch
+):
+    import json
+    from types import SimpleNamespace
+
+    rep = report(MAIN_OK, ADJACENT_OK)
+    commands: list[list[str]] = []
+
+    def fake_gh(*args):
+        commands.append(list(args))
+        if args[:2] == ("run", "list"):
+            return json.dumps([{"databaseId": 41}, {"databaseId": 42}])
+        if args[:2] == ("pr", "diff"):
+            return "README.md\n.github/scripts/browser_check.py\n"
+        raise AssertionError(args)
+
+    def fake_download(command, **kwargs):
+        run_id, directory = command[3], Path(command[command.index("-D") + 1])
+        if run_id == "41":  # a run of that commit that left no artifact: try the next one
+            return SimpleNamespace(returncode=1)
+        write_artifact(browser_check, directory, rep)
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(browser_check, "gh", fake_gh)
+    monkeypatch.setattr(browser_check.subprocess, "run", fake_download)
+
+    ok, message, warnings = browser_check.verify_pr(14, HEAD, "feat: let guests leave a topic (#6)")
+
+    assert ok, message
+    assert any("browser_check.py" in w for w in warnings)  # the PR changes the check itself
+    assert ["run", "list", "--workflow", "browser-check.yml", "--commit", HEAD] == commands[0][:6]
+
+
+def test_verify_pr_refuses_when_the_head_has_no_artifact(browser_check, monkeypatch):
+    monkeypatch.setattr(browser_check, "gh", lambda *args: "[]")
+
+    ok, message, warnings = browser_check.verify_pr(14, HEAD, "ci: x")
+
+    assert not ok
+    assert HEAD in message and "no browser-check artifact" in message
+    assert warnings == []
