@@ -1,4 +1,4 @@
-import { Alert, Button, Stack, TextInput } from "@mantine/core";
+import { Alert, Button, Stack, Textarea, TextInput } from "@mantine/core";
 import { type SubmitEvent, useState } from "react";
 import { bookingsApiCreate } from "../api/sdk.gen.ts";
 import type { Booking, CreateBooking } from "../api/types.gen.ts";
@@ -7,6 +7,7 @@ import type { Booking, CreateBooking } from "../api/types.gen.ts";
 const FIELD_RULES: Record<string, string> = {
   guestName: "От 1 до 100 символов",
   guestEmail: "Введите email в формате name@example.com, не длиннее 50 символов",
+  topic: "Не длиннее 500 символов",
 };
 
 type Errors = Partial<Record<string, string>>;
@@ -52,13 +53,24 @@ type Props = {
   start: string;
   /** Local start time, e.g. `09:00`, for the form's name. */
   time: string;
+  /** The optional topic; owned by the parent so it survives a lost slot. */
+  topic: string;
+  onTopicChange: (topic: string) => void;
   onBooked: (booking: Booking) => void;
   /** The slot cannot be booked any more (`taken` or `unavailable`): choose another. */
   onSlotLost: (reason: "taken" | "unavailable") => void;
 };
 
 /** Name and email of the guest for one chosen slot. */
-export function BookingForm({ eventTypeId, start, time, onBooked, onSlotLost }: Props) {
+export function BookingForm({
+  eventTypeId,
+  start,
+  time,
+  topic,
+  onTopicChange,
+  onBooked,
+  onSlotLost,
+}: Props) {
   const [guestName, setGuestName] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
   const [errors, setErrors] = useState<Errors>({});
@@ -70,7 +82,7 @@ export function BookingForm({ eventTypeId, start, time, onBooked, onSlotLost }: 
     setPending(true);
     setErrors({});
     setNotice(null);
-    const outcome = await book({ eventTypeId, start, guestName, guestEmail });
+    const outcome = await book({ eventTypeId, start, guestName, guestEmail, topic });
     setPending(false);
     switch (outcome.kind) {
       case "booked":
@@ -109,6 +121,14 @@ export function BookingForm({ eventTypeId, start, time, onBooked, onSlotLost }: 
           value={guestEmail}
           onChange={(e) => setGuestEmail(e.currentTarget.value)}
           error={errors.guestEmail}
+        />
+        <Textarea
+          label="Тема (необязательно)"
+          autosize
+          minRows={2}
+          value={topic}
+          onChange={(e) => onTopicChange(e.currentTarget.value)}
+          error={errors.topic}
         />
         <Button type="submit" loading={pending}>
           Записаться

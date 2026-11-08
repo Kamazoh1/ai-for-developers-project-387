@@ -1,5 +1,7 @@
 """Seam 1: the owner's list of upcoming bookings over HTTP, with "now" fixed by the test."""
 
+import sqlite3
+from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -54,9 +56,50 @@ def test_a_booking_is_listed_with_every_field_of_the_contract(make_client: Clien
             "end": "2026-11-06T10:45:00+03:00",
             "guestName": "Мария",
             "guestEmail": "maria@example.com",
+            "topic": "",
             "createdAt": "2026-11-05T10:00:00+03:00",
         }
     ]
+
+
+def test_the_owner_sees_the_topic_only_where_the_guest_left_one(
+    make_client: ClientFactory,
+) -> None:
+    client = make_client(now=NOW)
+    slug = create_type(client, 30)
+    book(client, slug, "2026-11-06T09:00:00+03:00", topic="Про релиз")
+    book(client, slug, "2026-11-06T10:00:00+03:00")
+
+    listed = client.get("/api/admin/bookings").json()
+
+    assert [b["topic"] for b in listed] == ["Про релиз", ""]
+
+
+def test_a_database_from_before_topics_opens_and_lists_its_bookings_without_a_topic(
+    make_client: ClientFactory, tmp_path: Path
+) -> None:
+    old = tmp_path / "old.db"
+    with closing(sqlite3.connect(old)) as connection, connection:
+        connection.executescript(
+            """
+            CREATE TABLE event_types (id TEXT PRIMARY KEY, name TEXT NOT NULL,
+                description TEXT NOT NULL, duration_minutes INTEGER NOT NULL);
+            CREATE TABLE bookings (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_type_id TEXT NOT NULL REFERENCES event_types(id),
+                start_utc TEXT NOT NULL, end_utc TEXT NOT NULL, guest_name TEXT NOT NULL,
+                guest_email TEXT NOT NULL, created_at TEXT NOT NULL);
+            INSERT INTO event_types VALUES ('call', 'Звонок', '', 30);
+            INSERT INTO bookings VALUES (1, 'call', '2026-11-06T06:00:00Z',
+                '2026-11-06T06:30:00Z', 'Мария', 'maria@example.com', '2026-11-05T07:00:00Z');
+            """
+        )
+
+    client = make_client(now=NOW, database_path=old)
+    assert [b["topic"] for b in client.get("/api/admin/bookings").json()] == [""]
+    assert book(client, "call", "2026-11-06T10:00:00+03:00", topic="Новая").status_code == 201
+    # Opening it a second time must not fail on the column that is already there.
+    again = make_client(now=NOW, database_path=old)
+    assert [b["topic"] for b in again.get("/api/admin/bookings").json()] == ["", "Новая"]
 
 
 def test_a_meeting_in_progress_is_still_upcoming_until_it_ends(

@@ -87,3 +87,52 @@ test("@adjacent two guests race for one slot, the owner sees the winner", async 
   await expect(meeting).toContainText("Ближайшая");
   await owner.close();
 });
+
+// Runs after the race test on purpose: that one expects to be the only and the nearest booking.
+test("@main a guest leaves a topic, the owner sees it only on that booking", async ({
+  page,
+  browser,
+  baseURL,
+  request,
+}) => {
+  const run = Date.now().toString(36);
+  const slug = `e2e-topic-${run}`;
+  const topic = `Обсудить релиз ${run}`;
+  const created = await request.post("/api/admin/event-types", {
+    data: { id: slug, name: `Тема ${run}`, durationMinutes: 30 },
+  });
+  expect(created.status()).toBe(201);
+
+  // First guest: books with a topic and sees it on the confirmation.
+  await page.goto(`/book/${slug}`);
+  await pickFirstFreeDayAfterToday(page);
+  const slots = page.getByRole("region", { name: /^Свободное время/ }).getByRole("button");
+  await slots.first().click();
+  await fillGuest(page, `С темой ${run}`, `topic-${run}@example.com`);
+  await page.getByLabel("Тема (необязательно)").fill(topic);
+  await page.getByRole("button", { name: "Записаться" }).click();
+  await expect(page.getByRole("region", { name: "Запись подтверждена" })).toContainText(
+    `Тема: ${topic}`,
+  );
+
+  // Second guest: books the next free slot without a topic; the confirmation has no "Тема" line.
+  await page.goto(`/book/${slug}`);
+  await pickFirstFreeDayAfterToday(page);
+  await slots.first().click();
+  await fillGuest(page, `Без темы ${run}`, `plain-${run}@example.com`);
+  await page.getByRole("button", { name: "Записаться" }).click();
+  const confirmation = page.getByRole("region", { name: "Запись подтверждена" });
+  await expect(confirmation).toContainText(`Без темы ${run}`);
+  await expect(confirmation).not.toContainText("Тема:");
+
+  // The owner sees the topic on the first booking only.
+  const owner = await browser.newContext({ baseURL, locale: "ru-RU" });
+  const adminPage = await owner.newPage();
+  await adminPage.goto("/admin/bookings");
+  const withTopic = adminPage.getByRole("article").filter({ hasText: `С темой ${run}` });
+  const withoutTopic = adminPage.getByRole("article").filter({ hasText: `Без темы ${run}` });
+  await expect(withTopic).toContainText(`Тема: ${topic}`);
+  await expect(withoutTopic).toHaveCount(1);
+  await expect(withoutTopic).not.toContainText("Тема:");
+  await owner.close();
+});
