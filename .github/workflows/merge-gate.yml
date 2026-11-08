@@ -1,0 +1,57 @@
+name: merge-gate
+
+# The human decision to merge, recorded against one commit. A person adds the label `merge-approved`
+# once the checks are green; the gate verifies the current head SHA (checks green on it, browser
+# artifact for it, no review blocker) and records the status `merge-gate` plus a comment with who
+# approved which SHA and when. A new commit resets it. See "Решение о мерже" in README.md.
+#
+# `pull_request_target` is used so that the gate itself comes from the BASE branch and a PR cannot
+# edit the rules it is judged by. It never checks out or runs code of the PR: only the base branch
+# is checked out, and everything it reads about the PR (title, comments, check runs, the browser
+# artifact) is data.
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review, labeled, unlabeled]
+
+# One run at a time per PR, a running run is never cancelled. GitHub does drop a run that is merely
+# queued when newer ones join the group, so a dropped reset is repaired by the next event: a head
+# without a status is made `pending` on the next `unlabeled`, and an approval always re-checks the
+# real head.
+concurrency:
+  group: merge-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    # Own branches only, and for label events only our label.
+    if: |
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      ((github.event.action != 'labeled' && github.event.action != 'unlabeled') ||
+        github.event.label.name == 'merge-approved')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      statuses: write # the commit status `merge-gate`
+      issues: write # the approval / refusal comment and removing the label (a PR is an issue here)
+      pull-requests: read # the changed files of the PR
+      checks: read # the check runs of the head commit
+      actions: read # the browser-check artifact
+    steps:
+      - uses: actions/checkout@v7 # pull_request_target: the base branch, never the PR head
+        with:
+          persist-credentials: false
+
+      - name: Record or reset the approval
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          ACTION: ${{ github.event.action }}
+          LABEL_NAME: ${{ github.event.label.name }}
+          SENDER_LOGIN: ${{ github.event.sender.login }}
+          SENDER_TYPE: ${{ github.event.sender.type }}
+          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: python3 .github/scripts/merge_gate.py

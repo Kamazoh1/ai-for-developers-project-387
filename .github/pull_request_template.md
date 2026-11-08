@@ -15,6 +15,9 @@
 - [ ] `GLOSSARY.md` / `docs/adr/` updated if a term or a decision changed
 - [ ] No secrets, tokens or `.env*` in the diff
 
+<!-- The merge decision is a person's, once the checks are green: add the label `merge-approved`
+     (`gh issue edit <PR> --add-label merge-approved`). `merge-gate` records who approved which SHA. -->
+
 **Evidence:** <!-- before / after: test output, screenshot, request and response -->
 
 ## Risk

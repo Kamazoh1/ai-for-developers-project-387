@@ -120,7 +120,9 @@ jobs:
                tests and the browser scenario: do not repeat that.
             5. Post the result as REVIEW.md "Output" says: one summary comment with the verdict
                line, the Spec check and findings (blocker / concern / nit, with file:line, the
-               broken criterion and a fix). Post an inline comment (confirmed: true) only for a
+               broken criterion and a fix). The first line of the comment is exactly
+               `Review of head `<first 7 characters of the head SHA>`: blockers: N, concerns: N,
+               nits: N`: the merge gate reads the verdict from it. Post an inline comment (confirmed: true) only for a
                finding tied to one line.
             6. Do not approve, do not request changes, do not edit files, do not push.
           claude_args: |
