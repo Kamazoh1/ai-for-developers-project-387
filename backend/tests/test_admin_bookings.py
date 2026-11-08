@@ -54,9 +54,29 @@ def test_a_booking_is_listed_with_every_field_of_the_contract(make_client: Clien
             "end": "2026-11-06T10:45:00+03:00",
             "guestName": "Мария",
             "guestEmail": "maria@example.com",
+            "topic": "",
             "createdAt": "2026-11-05T10:00:00+03:00",
         }
     ]
+
+
+def test_the_owner_sees_the_topic_the_guest_left(make_client: ClientFactory) -> None:
+    client = make_client(now=NOW)
+    slug = create_type(client, 45)
+    client.post(
+        "/api/bookings",
+        json={
+            "eventTypeId": slug,
+            "start": "2026-11-06T10:00:00+03:00",
+            "guestName": "Мария",
+            "guestEmail": "maria@example.com",
+            "topic": "Обсудить тариф",
+        },
+    )
+
+    (listed,) = client.get("/api/admin/bookings").json()
+
+    assert listed["topic"] == "Обсудить тариф"
 
 
 def test_a_meeting_in_progress_is_still_upcoming_until_it_ends(

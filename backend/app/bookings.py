@@ -23,6 +23,7 @@ from app.schemas import ApiModel
 from app.slots import is_slot_start
 
 GuestName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
+Topic = Annotated[str, StringConstraints(strip_whitespace=True, max_length=500)]
 GuestEmail = Annotated[
     str,
     StringConstraints(
@@ -49,6 +50,7 @@ class CreateBooking(ApiModel):
     start: OffsetDateTime
     guest_name: GuestName
     guest_email: GuestEmail
+    topic: Topic = ""
 
 
 class Booking(ApiModel):
@@ -58,6 +60,7 @@ class Booking(ApiModel):
     end: datetime
     guest_name: str
     guest_email: str
+    topic: str
     created_at: datetime
 
 
@@ -115,6 +118,7 @@ def create_booking(
         end=end.astimezone(timezone),
         guest_name=body.guest_name,
         guest_email=body.guest_email,
+        topic=body.topic,
         created_at=created_at.astimezone(timezone),
     )
 
@@ -140,7 +144,7 @@ def _insert(
 ) -> int:
     cursor = connection.execute(
         "INSERT INTO bookings (event_type_id, start_utc, end_utc, guest_name, guest_email, "
-        "created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        "created_at, topic) VALUES (?, ?, ?, ?, ?, ?, ?)",
         (
             body.event_type_id,
             to_stored(body.start),
@@ -148,6 +152,7 @@ def _insert(
             body.guest_name,
             body.guest_email,
             to_stored(created_at),
+            body.topic,
         ),
     )
     assert cursor.lastrowid is not None
@@ -161,8 +166,8 @@ def list_upcoming_bookings(
     """Bookings that end later than now, earliest start first; no pagination."""
     with db.connect() as connection:
         rows = connection.execute(
-            "SELECT id, event_type_id, start_utc, end_utc, guest_name, guest_email, created_at "
-            "FROM bookings WHERE end_utc > ? ORDER BY start_utc",
+            "SELECT id, event_type_id, start_utc, end_utc, guest_name, guest_email, topic, "
+            "created_at FROM bookings WHERE end_utc > ? ORDER BY start_utc",
             (to_stored(now),),
         ).fetchall()
     return [
@@ -173,6 +178,7 @@ def list_upcoming_bookings(
             end=from_stored(row["end_utc"]).astimezone(timezone),
             guest_name=row["guest_name"],
             guest_email=row["guest_email"],
+            topic=row["topic"],
             created_at=from_stored(row["created_at"]).astimezone(timezone),
         )
         for row in rows

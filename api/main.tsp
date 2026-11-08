@@ -217,6 +217,9 @@ model Booking {
   guestName: string;
   guestEmail: string;
 
+  /** The guest's topic for the call. Empty when the guest gave none. */
+  topic: string;
+
   /** When the booking was made, RFC 3339 with the calendar timezone's offset. */
   createdAt: offsetDateTime;
 }
@@ -236,6 +239,10 @@ model CreateBooking {
   @minLength(1)
   @maxLength(50)
   guestEmail: string;
+
+  /** Optional topic for the call, up to 500 characters after trimming surrounding whitespace. Omitted or blank means no topic. */
+  @maxLength(500)
+  topic?: string;
 }
 
 @route("/api/bookings")

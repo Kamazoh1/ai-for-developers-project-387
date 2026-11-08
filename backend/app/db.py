@@ -30,7 +30,8 @@ CREATE TABLE IF NOT EXISTS bookings (
     end_utc       TEXT NOT NULL,
     guest_name    TEXT NOT NULL,
     guest_email   TEXT NOT NULL,
-    created_at    TEXT NOT NULL
+    created_at    TEXT NOT NULL,
+    topic         TEXT NOT NULL DEFAULT ''
 );
 """
 
@@ -55,6 +56,17 @@ class Database:
             # WAL lets readers proceed while a booking transaction holds the write lock.
             connection.execute("PRAGMA journal_mode=WAL")
             connection.executescript(SCHEMA)
+            _add_missing_columns(connection)
+
+
+def _add_missing_columns(connection: sqlite3.Connection) -> None:
+    """Add columns that a database created before they joined SCHEMA lacks.
+
+    ``CREATE TABLE IF NOT EXISTS`` leaves an existing table as it was, so this brings it up to date.
+    """
+    columns = {row["name"] for row in connection.execute("PRAGMA table_info(bookings)")}
+    if "topic" not in columns:
+        connection.execute("ALTER TABLE bookings ADD COLUMN topic TEXT NOT NULL DEFAULT ''")
 
 
 @contextmanager

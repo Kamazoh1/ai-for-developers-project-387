@@ -53,6 +53,7 @@ def test_booking_a_free_slot_returns_the_booking_with_the_end_computed_by_the_se
         "end": "2026-11-06T10:45:00+03:00",
         "guestName": "Мария",
         "guestEmail": "maria@example.com",
+        "topic": "",
         "createdAt": "2026-11-05T10:00:00+03:00",
     }
 
@@ -216,6 +217,31 @@ def test_names_and_emails_are_trimmed(make_client: ClientFactory) -> None:
     assert response.status_code == 201
     assert response.json()["guestName"] == "Мария"
     assert response.json()["guestEmail"] == "maria@example.com"
+
+
+def test_a_topic_is_optional_trimmed_and_kept(make_client: ClientFactory) -> None:
+    client = make_client(now=NOW)
+    slug = create_type(client, 30)
+
+    with_topic = book(client, slug, "2026-11-06T10:00:00+03:00", topic="  Вопрос по договору  ")
+    blank_topic = book(client, slug, "2026-11-06T11:00:00+03:00", topic="   ")
+    no_topic = book(client, slug, "2026-11-06T12:00:00+03:00")
+
+    assert with_topic.json()["topic"] == "Вопрос по договору"
+    assert blank_topic.json()["topic"] == ""
+    assert no_topic.json()["topic"] == ""
+
+
+def test_a_topic_of_500_characters_is_accepted_and_501_is_not(make_client: ClientFactory) -> None:
+    client = make_client(now=NOW)
+    slug = create_type(client, 30)
+
+    assert book(client, slug, "2026-11-06T10:00:00+03:00", topic="я" * 500).status_code == 201
+    response = book(client, slug, "2026-11-06T11:00:00+03:00", topic="я" * 501)
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "validation_error"
+    assert [error["field"] for error in response.json()["fields"]] == ["topic"]
 
 
 @pytest.mark.parametrize(

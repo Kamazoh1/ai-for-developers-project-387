@@ -73,6 +73,7 @@ describe("booking a slot", () => {
       start: "2026-11-06T09:00:00+03:00",
       guestName: "Мария",
       guestEmail: "maria@example.com",
+      topic: "",
     });
     expect(within(confirmation).getByText("Знакомство")).toBeVisible();
     expect(within(confirmation).getByText(/6 ноября, пятница/)).toBeVisible();
@@ -82,6 +83,26 @@ describe("booking a slot", () => {
     expect(screen.queryByRole("form")).not.toBeInTheDocument();
     expect(screen.queryByRole("group", { name: "Дни записи" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /К выбору типа/ })).toHaveAttribute("href", "/book");
+  });
+
+  it("sends the optional topic and shows it on the confirmation", async () => {
+    let sent: { topic?: string } = {};
+    server.use(
+      http.get(SLOTS, () => HttpResponse.json(slotWindow({ "2026-11-06": [["09:00", "09:30"]] }))),
+      http.post(BOOKINGS, async ({ request }) => {
+        sent = (await request.json()) as { topic?: string };
+        return HttpResponse.json(booking({ topic: "Обсудить тариф" }), { status: 201 });
+      }),
+    );
+    await pickFirstSlot();
+    const form = screen.getByRole("form", { name: "Запись на 09:00" });
+    await userEvent.type(within(form).getByLabelText("Тема (необязательно)"), "Обсудить тариф");
+
+    await fillAndSubmit();
+
+    const confirmation = await screen.findByRole("region", { name: "Запись подтверждена" });
+    expect(sent.topic).toBe("Обсудить тариф");
+    expect(within(confirmation).getByText("Тема: Обсудить тариф")).toBeVisible();
   });
 
   it("shows server validation errors under the fields and keeps what was typed", async () => {

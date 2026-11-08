@@ -7,6 +7,7 @@ import type { Booking, CreateBooking } from "../api/types.gen.ts";
 const FIELD_RULES: Record<string, string> = {
   guestName: "От 1 до 100 символов",
   guestEmail: "Введите email в формате name@example.com, не длиннее 50 символов",
+  topic: "Не длиннее 500 символов",
 };
 
 type Errors = Partial<Record<string, string>>;
@@ -61,6 +62,7 @@ type Props = {
 export function BookingForm({ eventTypeId, start, time, onBooked, onSlotLost }: Props) {
   const [guestName, setGuestName] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
+  const [topic, setTopic] = useState("");
   const [errors, setErrors] = useState<Errors>({});
   const [notice, setNotice] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -70,7 +72,7 @@ export function BookingForm({ eventTypeId, start, time, onBooked, onSlotLost }: 
     setPending(true);
     setErrors({});
     setNotice(null);
-    const outcome = await book({ eventTypeId, start, guestName, guestEmail });
+    const outcome = await book({ eventTypeId, start, guestName, guestEmail, topic });
     setPending(false);
     switch (outcome.kind) {
       case "booked":
@@ -109,6 +111,12 @@ export function BookingForm({ eventTypeId, start, time, onBooked, onSlotLost }: 
           value={guestEmail}
           onChange={(e) => setGuestEmail(e.currentTarget.value)}
           error={errors.guestEmail}
+        />
+        <TextInput
+          label="Тема (необязательно)"
+          value={topic}
+          onChange={(e) => setTopic(e.currentTarget.value)}
+          error={errors.topic}
         />
         <Button type="submit" loading={pending}>
           Записаться
