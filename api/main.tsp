@@ -240,7 +240,7 @@ model CreateBooking {
   @maxLength(50)
   guestEmail: string;
 
-  /** Optional note on what the call is about: at most 500 characters after trimming surrounding whitespace; empty or absent means no topic. */
+  /** Optional note on what the call is about: at most 500 characters as sent; surrounding whitespace is trimmed on save, and an empty or absent topic means no topic. */
   @maxLength(500)
   topic?: string;
 }

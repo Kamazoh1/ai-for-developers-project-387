@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
-from pydantic import AwareDatetime, BeforeValidator, StringConstraints
+from pydantic import AfterValidator, AwareDatetime, BeforeValidator, Field, StringConstraints
 
 from app.clock import CalendarTimezone, Now, NowSource
 from app.db import Database, get_db, lock_timeout_as_service_busy
@@ -30,7 +30,8 @@ GuestEmail = Annotated[
     ),
 ]
 # Optional; blank after trimming means "no topic", stored as an empty string.
-Topic = Annotated[str, StringConstraints(strip_whitespace=True, max_length=500)]
+# The length is checked on the raw string, as the contract says, and only then trimmed.
+Topic = Annotated[str, Field(max_length=500), AfterValidator(str.strip)]
 
 
 _RFC_3339 = re.compile(r"^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(\.\d+)?([Zz]|[+-]\d{2}:\d{2})$")

@@ -85,6 +85,19 @@ def test_a_topic_may_have_500_characters_but_not_501(make_client: ClientFactory)
     assert "11:00" in free_starts(client, slug, "2026-11-06")
 
 
+def test_the_topic_length_is_checked_before_trimming_as_the_contract_says(
+    make_client: ClientFactory,
+) -> None:
+    client = make_client(now=NOW)
+    slug = create_type(client, 30)
+
+    padded = book(client, slug, "2026-11-06T10:00:00+03:00", topic=" " + "т" * 500)
+
+    assert padded.status_code == 422
+    assert [f["field"] for f in padded.json()["fields"]] == ["topic"]
+    assert "10:00" in free_starts(client, slug, "2026-11-06")
+
+
 def test_a_conflicting_booking_with_a_topic_is_refused_and_its_topic_is_not_kept(
     make_client: ClientFactory,
 ) -> None:
