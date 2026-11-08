@@ -421,6 +421,7 @@ def main() -> int:
     decision.notes.extend(warnings)
     if decision.ok:
         now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        recorded = False
         try:
             # The record first, the status after it: `success` never stands without its comment.
             comment(
@@ -428,6 +429,7 @@ def main() -> int:
                 pr_number,
                 approval_comment(sender_login, head_sha, now, decision, run_url),
             )
+            recorded = True
             set_status(
                 repo,
                 head_sha,
@@ -444,15 +446,16 @@ def main() -> int:
                     "the gate could not record the approval: see the run",
                     run_url,
                 )
-            with contextlib.suppress(Exception):
-                # The approval comment may already stand in the thread: void it in the thread too.
-                comment(
-                    repo,
-                    pr_number,
-                    f"{marker(head_sha)}\n**The approval above is void: it was not recorded** "
-                    f"(the gate could not set its status for `{head_sha}`). Remove the label "
-                    f"`{LABEL}` and add it again to retry. Gate run: {run_url}",
-                )
+            if recorded:
+                with contextlib.suppress(Exception):
+                    # The approval comment stands in the thread: void it there too.
+                    comment(
+                        repo,
+                        pr_number,
+                        f"{marker(head_sha)}\n**The approval above is void: it was not recorded** "
+                        f"(the gate could not set its status for `{head_sha}`). Remove the label "
+                        f"`{LABEL}` and add it again to retry. Gate run: {run_url}",
+                    )
             raise
         print(f"Approved {head_sha} by {sender_login}.")
         return 0

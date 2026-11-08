@@ -282,6 +282,7 @@ class Repo:
         self.files = ["README.md"]
         self.browser = (True, "OK: the browser check passed", [])
         self.comment_fails = False
+        self.first_comment_fails = False  # only the first attempt: a transient error
         self.success_status_fails = False
         monkeypatch.setattr(gate, "gh", self.gh)
         monkeypatch.setattr(gate, "fetch_check_runs", lambda repo, sha: self.checks)
@@ -298,6 +299,9 @@ class Repo:
         self.calls.append(text)
         if self.success_status_fails and "state=success" in text:
             raise subprocess.CalledProcessError(1, args, "", "HTTP 500")
+        if self.first_comment_fails and "issues/5/comments" in text and "-X POST" in text:
+            self.first_comment_fails = False
+            raise subprocess.CalledProcessError(1, args, "", "HTTP 502")
         if self.comment_fails and "issues/5/comments" in text and "-X POST" in text:
             raise subprocess.CalledProcessError(1, args, "", "HTTP 403: Resource not accessible")
         if text.startswith("api repos/R/pulls/5") and "-X" not in text:
@@ -452,3 +456,14 @@ def test_the_log_of_a_failing_call_names_the_endpoint_but_not_the_comment_body(
     err = capsys.readouterr().err
     assert "POST" in err and "repos/R/issues/5/comments" in err and "HTTP 403" in err
     assert "SECRET TEXT" not in err
+
+
+def test_no_void_note_is_posted_when_there_was_no_approval_comment_to_void(gate, monkeypatch, repo):
+    repo.first_comment_fails = True  # the approval comment fails once, later comments work
+
+    with pytest.raises(subprocess.CalledProcessError):
+        fire(gate, monkeypatch, "labeled")
+
+    writes = repo.writes()
+    assert any("state=error" in w for w in writes)
+    assert not any("void" in w for w in writes)  # nothing stands in the thread that could be void
