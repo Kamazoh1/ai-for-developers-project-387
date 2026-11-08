@@ -25,8 +25,12 @@ A candidate interval for an event type: as long as that type's duration and star
 _Avoid_: Time, appointment time, interval
 
 **Booking**:
-A taken interval of one event type, together with the name and email of the guest who took it. Bookings never overlap, whatever their event types.
+A taken interval of one event type, together with the name and email of the guest who took it and, optionally, a topic. Bookings never overlap, whatever their event types.
 _Avoid_: Event, reservation, appointment, meeting
+
+**Topic**:
+What the guest wants to talk about, an optional short text left when booking and shown to the guest on the confirmation and to the owner next to the booking. At most 500 characters as sent; surrounding spaces are trimmed after that, and an empty topic means none.
+_Avoid_: Subject, agenda, note, comment
 
 **Calendar timezone**:
 The time zone in which the calendar's days and working hours are defined. Every slot belongs to a day of this zone.
