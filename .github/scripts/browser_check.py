@@ -202,9 +202,8 @@ def command_build(arguments: argparse.Namespace) -> int:
     return 0 if result["verdict"] == "pass" else 1
 
 
-def command_verify(arguments: argparse.Namespace) -> int:
-    pr = json.loads(gh("pr", "view", str(arguments.pr), "--json", "headRefOid,title"))
-    head_sha, title = pr["headRefOid"], pr["title"]
+def verify_pr(pr_number: int, head_sha: str, title: str) -> tuple[bool, str, list[str]]:
+    """The merge decision for a PR: (ok, message, warnings). Used by `verify` and by merge_gate."""
     runs = json.loads(
         gh(
             "run",
@@ -240,22 +239,32 @@ def command_verify(arguments: argparse.Namespace) -> int:
                 ok, message = assess(
                     Path(directory), pr_head_sha=head_sha, pr_title=title
                 )
-                print(message)
                 touched = watched_files_touched(
-                    gh("pr", "diff", str(arguments.pr), "--name-only").split()
+                    gh("pr", "diff", str(pr_number), "--name-only").split()
                 )
+                warnings = []
                 if touched:
-                    print(
-                        "WARNING: this PR changes the check itself ("
+                    warnings.append(
+                        "this PR changes the check itself ("
                         + ", ".join(touched)
                         + "): the artifact comes from the PR's own version of it. "
                         "Read those changes before trusting the result."
                     )
-                return 0 if ok else 1
-    print(
-        f"REFUSED: no browser-check artifact for the current head {head_sha} of PR #{arguments.pr}."
+                return ok, message, warnings
+    return (
+        False,
+        f"REFUSED: no browser-check artifact for the current head {head_sha} of PR #{pr_number}.",
+        [],
     )
-    return 1
+
+
+def command_verify(arguments: argparse.Namespace) -> int:
+    pr = json.loads(gh("pr", "view", str(arguments.pr), "--json", "headRefOid,title"))
+    ok, message, warnings = verify_pr(arguments.pr, pr["headRefOid"], pr["title"])
+    print(message)
+    for warning in warnings:
+        print(f"WARNING: {warning}")
+    return 0 if ok else 1
 
 
 def main() -> int:
