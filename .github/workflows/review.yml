@@ -36,12 +36,37 @@ jobs:
     permissions:
       contents: read
       pull-requests: write # the review comment and inline comments
+      actions: read # the limit counts earlier review runs of this PR
       id-token: write # the action exchanges the OIDC token for the Claude GitHub App token
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # the base commit must be there to read REVIEW.md from it and to diff
           persist-credentials: false
+
+      # The limit of reviews per PR is checked by code BEFORE the model is called. When a PR has
+      # used them up, this step comments once per commit (reason, head SHA, link to the logs) and
+      # fails, so the model step below never runs. The limit is the repository variable
+      # REVIEW_MAX_RUNS_PER_PR (5 if unset). The script comes from the base commit, so a PR cannot
+      # edit its own limit; it is absent from the base only in the PR that introduces it.
+      - name: Check the review limit of this PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          MAX_RUNS: ${{ vars.REVIEW_MAX_RUNS_PER_PR }}
+        run: |
+          script=.github/scripts/review_limit.py
+          if ! git cat-file -e "$BASE_SHA:$script" 2>/dev/null; then
+            echo "::notice::$script is not in the base branch yet: no review limit for this run"
+            exit 0
+          fi
+          git show "$BASE_SHA:$script" > "$RUNNER_TEMP/review_limit.py"
+          python3 "$RUNNER_TEMP/review_limit.py"
 
       - uses: anthropics/claude-code-action@v1
         with:
